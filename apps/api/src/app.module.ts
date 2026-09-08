@@ -24,6 +24,8 @@ import { LiveAdminController } from './live/live-admin.controller.js';
 import { LiveController } from './live/live.controller.js';
 import { LiveAdminGuard } from './live/live-admin.guard.js';
 import { LiveSimulationService } from './live/live-simulation.service.js';
+import { CasinoController } from './casino/casino.controller.js';
+import { CasinoService } from './casino/casino.service.js';
 import {
   BET_SLIP_MODEL,
   DEMO_TICKET_MODEL,
@@ -59,7 +61,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController],
-  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, DemoAuthGuard, LiveAdminGuard],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController],
+  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, DemoAuthGuard, LiveAdminGuard],
 })
 export class AppModule {}

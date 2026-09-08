@@ -7,7 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
 import { useLiveFeed } from './useLiveFeed';
-import type { BetBuilderValidation, BetSlip, CashoutQuote, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -98,6 +98,10 @@ function App() {
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
   const [slipBusy, setSlipBusy] = useState(false);
+  const [casinoGames, setCasinoGames] = useState<CasinoGame[]>([]);
+  const [casinoGame, setCasinoGame] = useState<CasinoGame | null>(null);
+  const [casinoRound, setCasinoRound] = useState<CasinoRound | null>(null);
+  const [casinoBusy, setCasinoBusy] = useState(false);
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
 
@@ -186,6 +190,10 @@ function App() {
       .finally(() => { if (current) setIsOfferLoading(false); });
     return () => { current = false; };
   }, [periodFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'Casino' && !casinoGames.length) api.getCasinoGames().then(setCasinoGames).catch(() => undefined);
+  }, [activeTab, casinoGames.length]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !liveActivity) { setIsCountLoaded(true); return; }
@@ -352,6 +360,13 @@ function App() {
     }
   };
 
+  const playCasino = async (game: CasinoGame) => {
+    setCasinoBusy(true);
+    try { setCasinoRound(await api.playCasinoGame(game.id, `ca510000-1127-45b1-ab01-${String(Date.now()).slice(-12)}`)); }
+    catch (error) { Alert.alert('Demo casino', error instanceof Error ? error.message : 'Unable to play this demo round.'); }
+    finally { setCasinoBusy(false); }
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView edges={['top']} style={styles.screen}>
@@ -376,7 +391,7 @@ function App() {
           {activeTab === 'Live' && !detailEvent && <View><Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.status === 'current' ? 'Live feed connected · Demo simulation' : 'Live feed reconnecting · Prices may be stale'}</Text>{liveFeed.notification && <Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.notification}</Text>}<LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={liveFeed.status === 'current' ? toggleOfferOdd : () => Alert.alert('Live feed unavailable', 'Wait for the current prices to reconnect.')} onOpen={setDetailEvent} />{Object.values(liveFeed.snapshots).filter(snapshot => snapshot.event.status === 'live').map(snapshot => <View key={snapshot.eventId} style={styles.infoCard}><Text style={styles.infoTitle}>{snapshot.event.sport} · {snapshot.period} · {snapshot.running ? 'Simulation running' : 'Simulation paused'}</Text>{snapshot.incidents.slice(-5).map(incident => <Text key={incident.id} style={styles.infoBody}>{Math.floor(incident.clockSeconds / 60)}′ {incident.label}</Text>)}</View>)}</View>}
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
-          {activeTab === 'Casino' && <CasinoScreen />}
+          {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
           {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : <MenuScreen onWallet={() => setWalletOpen(true)} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
@@ -672,11 +687,25 @@ function ReceiptRow({ label, value, highlight = false }: { label: string; value:
   return <View style={styles.receiptRow}><Text style={styles.stakeLabel}>{label}</Text><Text style={[styles.stakeValue, highlight && styles.receiptHighlight]}>{value}</Text></View>;
 }
 
-function CasinoScreen() {
+function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { games: CasinoGame[]; game: CasinoGame | null; round: CasinoRound | null; busy: boolean; onOpen: (game: CasinoGame) => void; onBack: () => void; onPlay: (game: CasinoGame) => void }) {
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  if (game) return <View testID="casino-screen">
+    <View style={styles.screenHeading}><Pressable testID="casino-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>{game.name.toUpperCase()}</Text><Text style={styles.ticketStatus}>DEMO ONLY</Text></View>
+    <View style={[styles.casinoStage, game.type === 'crash' ? styles.casinoCrash : game.type === 'dice' ? styles.casinoDice : styles.casinoSlots]}>
+      <Text style={styles.casinoStageLabel}>{game.type === 'crash' ? 'FLIGHT MULTIPLIER' : game.type === 'dice' ? 'LUCKY ROLL' : 'NEON REELS'}</Text>
+      <Text testID="casino-result" style={styles.casinoResult}>{round ? game.type === 'crash' ? `${round.multiplier?.toFixed(2)}×` : game.type === 'dice' ? round.dice?.join('  +  ') : round.reels?.join('   ') : game.type === 'crash' ? '1.00×' : game.type === 'dice' ? '⚀  ⚀' : '◆   ●   ★'}</Text>
+      <Text style={styles.casinoOutcome}>{round?.outcomeLabel ?? game.tagline}</Text>
+      {round && <Text style={styles.ticketStatus}>ROUND {round.round}</Text>}
+    </View>
+    <View style={styles.casinoDisclosure}><Text style={styles.slipWarningCode}>SIMULATION · NO CASH VALUE</Text><Text style={styles.infoBody}>Results are deterministic demo outcomes. No stake, payout or payment method is involved.</Text></View>
+    <Pressable testID="play-casino-button" disabled={busy} onPress={() => onPlay(game)} style={[styles.placeButton, busy && styles.disabled]}><Text style={styles.placeButtonText}>{busy ? 'PLAYING…' : round ? 'PLAY AGAIN' : 'PLAY DEMO ROUND'}</Text></Pressable>
+  </View>;
   return <View testID="casino-screen">
-    <View style={styles.screenHeading}><Text style={styles.screenTitle}>CASINO</Text><Text style={styles.sectionAction}>FILTER</Text></View>
-    <View style={styles.casinoGrid}>{['Live tables', 'Jackpots', 'Crash', 'New games', 'Slots', 'Favourites'].map((title, index) =>
-      <View key={title} style={[styles.gameTile, index < 2 && styles.gameTileFeatured]}><Text style={styles.gameBadge}>{index < 2 ? 'HOT' : 'DEMO'}</Text><Text style={styles.gameTitle}>{title}</Text></View>)}</View>
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>CASINO</Text><Text style={styles.ticketStatus}>3 PLAYABLE DEMOS</Text></View>
+    <View style={styles.casinoHero}><Text style={styles.casinoHeroEyebrow}>FEG PLAY LAB</Text><Text style={styles.casinoHeroTitle}>Three games. Instant demo rounds.</Text><Text style={styles.infoBody}>Native simulations built for this app—no WebView and no real-money play.</Text></View>
+    <View style={styles.casinoGrid}>{games.map((item, index) =>
+      <Pressable key={item.id} testID={`casino-game-${item.type}`} onPress={() => onOpen(item)} style={[styles.gameTile, index === 0 && styles.gameTileFeatured]}><View style={styles.gameTileTop}><Text style={styles.gameBadge}>DEMO</Text><Pressable testID={`casino-favorite-${item.type}`} onPress={() => setFavorites(current => { const next = new Set(current); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; })}><Text style={[styles.detailFavorite, favorites.has(item.id) && styles.eventFavoriteActive]}>★</Text></Pressable></View><Text style={styles.gameGlyph}>{item.type === 'crash' ? '↗' : item.type === 'dice' ? '⚄' : '777'}</Text><Text style={styles.gameTitle}>{item.name}</Text><Text style={styles.gameTagline}>{item.tagline}</Text></Pressable>)}</View>
+    {!games.length && <OfferSkeleton />}
   </View>;
 }
 
@@ -941,10 +970,24 @@ const styles = StyleSheet.create({
   ledgerDebit: { color: '#FF8189' },
   ledgerBalance: { color: '#8995A3', fontSize: 8, marginTop: 3, textAlign: 'right' },
   casinoGrid: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  gameTile: { width: '48.9%', height: 118, padding: 10, backgroundColor: '#232B36', justifyContent: 'space-between' },
+  casinoHero: { margin: 10, padding: 18, backgroundColor: '#102D55', borderLeftWidth: 3, borderLeftColor: '#3B95FF' },
+  casinoHeroEyebrow: { color: '#69B0FF', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+  casinoHeroTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 8 },
+  gameTile: { width: '48.9%', minHeight: 172, padding: 12, backgroundColor: '#232B36', justifyContent: 'space-between' },
   gameTileFeatured: { backgroundColor: '#164B8D' },
+  gameTileTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   gameBadge: { alignSelf: 'flex-start', color: '#FFFFFF', fontSize: 7, fontWeight: '900', backgroundColor: '#D92532', paddingHorizontal: 5, paddingVertical: 3 },
+  gameGlyph: { color: '#6CB3FF', fontSize: 34, fontWeight: '900' },
   gameTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  gameTagline: { color: '#9BA8B7', fontSize: 8, lineHeight: 12 },
+  casinoStage: { margin: 10, minHeight: 260, padding: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  casinoCrash: { backgroundColor: '#071F39', borderColor: '#318EEC' },
+  casinoDice: { backgroundColor: '#18253A', borderColor: '#9A6BFF' },
+  casinoSlots: { backgroundColor: '#321735', borderColor: '#FF59B2' },
+  casinoStageLabel: { color: '#91BDEB', fontSize: 9, fontWeight: '900', letterSpacing: 1.5 },
+  casinoResult: { color: '#FFFFFF', fontSize: 42, fontWeight: '900', marginVertical: 24, textAlign: 'center' },
+  casinoOutcome: { color: '#C7D4E2', fontSize: 11, lineHeight: 17, textAlign: 'center', marginBottom: 12 },
+  casinoDisclosure: { margin: 10, padding: 12, backgroundColor: '#24202A', borderLeftWidth: 3, borderLeftColor: '#F0A93B' },
   menuRow: { height: 54, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   menuText: { color: '#E8ECF1', fontSize: 12, fontWeight: '700' },
   emptyState: { margin: 22, paddingVertical: 54, alignItems: 'center' },

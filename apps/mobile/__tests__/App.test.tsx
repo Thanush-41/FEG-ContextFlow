@@ -91,6 +91,12 @@ jest.mock('@feg/api-client', () => ({
     getCashoutQuote: jest.fn((_ownerId: string, ticketId: string) => Promise.resolve({ id: 'quote-test-0001', ticketId, amount: { currency: 'DCO', minorUnits: 150 }, expiresAt: '2026-09-08T12:00:30.000Z' })),
     cashoutTicket: jest.fn((_ownerId: string, ticketId: string) => { const current = placedTickets.find(item => item.id === ticketId); const resolved = { ...current, status: 'cashed_out', resolution: 'cashout', settledAt: '2026-09-08T12:00:10.000Z', payout: { currency: 'DCO', minorUnits: 150 } }; placedTickets = [resolved]; return Promise.resolve(resolved); }),
     copyTicketToSlip: jest.fn(() => Promise.resolve({ slip, unavailableSelectionIds: [], repricedSelectionIds: [] })),
+    getCasinoGames: jest.fn(() => Promise.resolve([
+      { id: 'casino-crash-flight', name: 'Sky Crash', type: 'crash', tagline: 'Watch the multiplier climb.', volatility: 'high', demoOnly: true },
+      { id: 'casino-lucky-dice', name: 'Lucky Dice', type: 'dice', tagline: 'Roll deterministic dice.', volatility: 'low', demoOnly: true },
+      { id: 'casino-triple-slots', name: 'Triple Pulse', type: 'slots', tagline: 'Spin three neon reels.', volatility: 'medium', demoOnly: true },
+    ])),
+    playCasinoGame: jest.fn((gameId: string) => Promise.resolve({ id: 'casino-round-test', gameId, ownerId: 'guest-device-0001', round: 1, outcomeLabel: 'Flight ended at 2.50×', multiplier: 2.5, createdAt: '2026-09-08T12:00:00.000Z', demoOnly: true })),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -197,6 +203,11 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
     byTestId('tab-casino').props.onPress(),
   );
   expect(byTestId('casino-screen')).toBeTruthy();
+  await ReactTestRenderer.act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 0)); });
+  expect(byTestId('casino-game-crash')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('casino-game-crash').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('play-casino-button').props.onPress(); });
+  expect(byTestId('casino-result').props.children).toBe('2.50×');
 
   await ReactTestRenderer.act(async () =>
     byTestId('tab-menu').props.onPress(),

@@ -2,6 +2,8 @@ import {
   type ApiError,
   type CashoutQuote,
   type CopyTicketResult,
+  type CasinoGame,
+  type CasinoRound,
   type DemoTicket,
   type PlaceDemoBet,
   type OfferResponse,
@@ -124,6 +126,14 @@ export class ContextFlowClient {
 
   copyTicketToSlip(ownerId: string, ticketId: string, tab: number, expectedVersion: number): Promise<CopyTicketResult> {
     return this.post(`/api/tickets/${encodeURIComponent(ownerId)}/${encodeURIComponent(ticketId)}/copy`, { tab, expectedVersion });
+  }
+
+  getCasinoGames(): Promise<CasinoGame[]> {
+    return this.get('/api/casino');
+  }
+
+  playCasinoGame(gameId: string, idempotencyKey: string): Promise<CasinoRound> {
+    return this.post(`/api/casino/${encodeURIComponent(gameId)}/play`, { idempotencyKey });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

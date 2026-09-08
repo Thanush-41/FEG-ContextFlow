@@ -348,6 +348,31 @@ export const CopyTicketResultSchema = z.object({
 });
 export type CopyTicketResult = z.infer<typeof CopyTicketResultSchema>;
 
+export const CasinoGameSchema = z.object({
+  id: PublicIdSchema,
+  name: z.string().min(1),
+  type: z.enum(['crash', 'dice', 'slots']),
+  tagline: z.string().min(1),
+  volatility: z.enum(['low', 'medium', 'high']),
+  demoOnly: z.literal(true),
+});
+export type CasinoGame = z.infer<typeof CasinoGameSchema>;
+
+export const CasinoPlaySchema = z.object({ idempotencyKey: z.string().uuid() });
+export const CasinoRoundSchema = z.object({
+  id: PublicIdSchema,
+  gameId: PublicIdSchema,
+  ownerId: PublicIdSchema,
+  round: z.number().int().positive(),
+  outcomeLabel: z.string().min(1),
+  multiplier: z.number().positive().optional(),
+  dice: z.array(z.number().int().min(1).max(6)).length(2).optional(),
+  reels: z.array(z.string().min(1)).length(3).optional(),
+  createdAt: z.string().datetime(),
+  demoOnly: z.literal(true),
+});
+export type CasinoRound = z.infer<typeof CasinoRoundSchema>;
+
 export const VoiceSessionStateSchema = z.enum([
   'idle',
   'listening',

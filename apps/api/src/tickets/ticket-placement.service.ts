@@ -8,6 +8,7 @@ import { EventDetailService } from '../event-detail/event-detail.service.js';
 import { SlipsService } from '../slips/slips.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { RealtimeGateway } from '../realtime/realtime.gateway.js';
+import { AccountService } from '../account/account.service.js';
 
 type StoredTicket = DemoTicket & { idempotencyKey: string };
 
@@ -21,6 +22,7 @@ export class TicketPlacementService {
     @Inject(WalletService) private readonly wallets: WalletService,
     @Optional() @InjectModel(DEMO_TICKET_MODEL) private readonly ticketModel?: Model<StoredTicket>,
     @Optional() @Inject(RealtimeGateway) private readonly realtime?: RealtimeGateway,
+    @Optional() @Inject(AccountService) private readonly account?: AccountService,
   ) {}
 
   async list(ownerId: string, status?: DemoTicket['status']): Promise<DemoTicket[]> {
@@ -106,6 +108,8 @@ export class TicketPlacementService {
     if (!slip.selections.length) throw new BadRequestException({ code: 'EMPTY_SLIP', message: 'Add a selection before confirming.' });
     if (slip.warnings.length) throw new BadRequestException({ code: 'SLIP_WARNINGS', message: 'Resolve all slip warnings before confirming.', warnings: slip.warnings });
     if (!slip.totals) throw new BadRequestException({ code: 'INVALID_TOTALS', message: 'The slip calculation could not be confirmed.' });
+    const profile = this.account ? await this.account.profile(actor) : undefined;
+    if (profile && slip.stake.minorUnits > profile.maxDemoStakeMinorUnits) throw new BadRequestException({ code: 'ACCOUNT_STAKE_LIMIT', message: `Your demo stake limit is ${(profile.maxDemoStakeMinorUnits / 100).toFixed(2)} DCO.` });
     await this.revalidate(slip.selections);
     const ticketId = `ticket-${randomUUID()}`;
     const code = `FEG-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;

@@ -26,6 +26,8 @@ import { LiveAdminGuard } from './live/live-admin.guard.js';
 import { LiveSimulationService } from './live/live-simulation.service.js';
 import { CasinoController } from './casino/casino.controller.js';
 import { CasinoService } from './casino/casino.service.js';
+import { AccountController } from './account/account.controller.js';
+import { AccountService } from './account/account.service.js';
 import {
   BET_SLIP_MODEL,
   DEMO_TICKET_MODEL,
@@ -33,12 +35,16 @@ import {
   LEDGER_ENTRY_MODEL,
   SPORTS_EVENT_MODEL,
   WALLET_MODEL,
+  DEMO_PROFILE_MODEL,
+  DEMO_SESSION_MODEL,
   betSlipSchema,
   demoTicketSchema,
   eventDetailSchema,
   ledgerEntrySchema,
   sportsEventSchema,
   walletSchema,
+  demoProfileSchema,
+  demoSessionSchema,
 } from './persistence/models.js';
 
 const mongoUri = process.env.MONGODB_URI;
@@ -52,6 +58,8 @@ const persistenceImports = mongoUri
         { name: BET_SLIP_MODEL, schema: betSlipSchema },
         { name: WALLET_MODEL, schema: walletSchema },
         { name: LEDGER_ENTRY_MODEL, schema: ledgerEntrySchema },
+        { name: DEMO_PROFILE_MODEL, schema: demoProfileSchema },
+        { name: DEMO_SESSION_MODEL, schema: demoSessionSchema },
       ]),
     ]
   : [];
@@ -61,7 +69,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController],
-  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, DemoAuthGuard, LiveAdminGuard],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController, AccountController],
+  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, AccountService, DemoAuthGuard, LiveAdminGuard],
 })
 export class AppModule {}

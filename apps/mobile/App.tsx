@@ -7,7 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
 import { useLiveFeed } from './useLiveFeed';
-import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, DemoProfile, DemoSession, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -94,6 +94,9 @@ function App() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState<DemoProfile | null>(null);
+  const [sessions, setSessions] = useState<DemoSession[]>([]);
   const [slip, setSlip] = useState<BetSlip | null>(null);
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
@@ -157,10 +160,17 @@ function App() {
     return next;
   }, []);
 
+  const refreshAccount = useCallback(async () => {
+    const deviceName = Platform.OS === 'ios' ? 'iPhone / iOS' : 'Android device';
+    const [nextProfile] = await Promise.all([api.getDemoProfile(slipOwnerId), api.createDemoSession(slipOwnerId, deviceName)]);
+    setProfile(nextProfile); setSessions(await api.getDemoSessions(slipOwnerId));
+  }, []);
+
   useEffect(() => {
     refreshWallet().catch(() => undefined);
     refreshTickets().catch(() => undefined);
-  }, [refreshTickets, refreshWallet]);
+    refreshAccount().catch(() => undefined);
+  }, [refreshAccount, refreshTickets, refreshWallet]);
 
   useEffect(() => {
     if (!slip) return;
@@ -392,7 +402,7 @@ function App() {
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
           {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
-          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : <MenuScreen onWallet={() => setWalletOpen(true)} />)}
+          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
           onMode={async mode => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, mode, ...(mode === 'system' ? { systemSize: Math.max(1, slip.selections.length - 1) } : {}) })); }}
@@ -400,7 +410,7 @@ function App() {
           onRemove={async selectionId => { if (slip) setSlip(await api.removeSlipSelection(slipOwnerId, slipTab, selectionId, slip.version)); }}
           onAccept={async () => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, acceptOddsChanges: true })); }}
           onClear={async () => { if (slip) setSlip(await api.clearSlip(slipOwnerId, slipTab, slip.version)); }} onPlace={() => { setActiveTab('Tickets'); setSlipView('compact'); }} />
-        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); }} />
+        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); if (tab !== 'Menu') { setProfileOpen(false); setWalletOpen(false); } }} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -709,12 +719,36 @@ function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { ga
   </View>;
 }
 
-function MenuScreen({ onWallet }: { onWallet: () => void }) {
+function MenuScreen({ onProfile }: { onProfile: () => void }) {
   return <View testID="menu-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>MENU</Text></View>
     {['Profile & demo wallet', 'Promotions', 'Community', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
-      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-wallet-button' : undefined} onPress={item === 'Profile & demo wallet' ? onWallet : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-profile-button' : undefined} onPress={item === 'Profile & demo wallet' ? onProfile : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
   </View>;
+}
+
+function ProfileScreen({ profile, sessions, onBack, onWallet, onSave, onRevoke }: { profile: DemoProfile | null; sessions: DemoSession[]; onBack: () => void; onWallet: () => void; onSave: (input: Partial<DemoProfile>) => Promise<void>; onRevoke: (sessionId: string) => Promise<void> }) {
+  const [name, setName] = useState(profile?.displayName ?? 'Demo Player');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (profile) setName(profile.displayName); }, [profile]);
+  if (!profile) return <View testID="profile-screen"><OfferSkeleton /></View>;
+  const save = async (input: Partial<DemoProfile>) => { setBusy(true); try { await onSave(input); } catch (error) { Alert.alert('Profile', error instanceof Error ? error.message : 'Unable to save settings.'); } finally { setBusy(false); } };
+  return <View testID="profile-screen">
+    <View style={styles.screenHeading}><Pressable testID="profile-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>PROFILE & SETTINGS</Text><Text style={styles.ticketStatus}>DEMO</Text></View>
+    <View style={styles.profileCard}><Text style={styles.quickAmountLabel}>DISPLAY NAME</Text><TextInput testID="profile-name-input" value={name} onChangeText={setName} style={styles.marketSearch} /><Pressable testID="save-profile-button" disabled={busy || name.trim().length < 2} onPress={() => save({ displayName: name.trim() })} style={[styles.secondaryButton, (busy || name.trim().length < 2) && styles.disabled]}><Text style={styles.secondaryButtonText}>SAVE NAME</Text></Pressable></View>
+    <Pressable testID="profile-wallet-button" onPress={onWallet} style={styles.menuRow}><Text style={styles.menuText}>Demo wallet</Text><Text style={styles.chevron}>›</Text></Pressable>
+    <SettingRow testID="setting-locale" label="LANGUAGE" value={profile.locale === 'en' ? 'English' : 'Hrvatski'} onPress={() => save({ locale: profile.locale === 'en' ? 'hr' : 'en' })} />
+    <SettingRow testID="setting-notifications" label="NOTIFICATIONS" value={profile.notificationsEnabled ? 'On' : 'Off'} onPress={() => save({ notificationsEnabled: !profile.notificationsEnabled })} />
+    <SettingRow testID="setting-transcripts" label="STORE VOICE TRANSCRIPTS" value={profile.transcriptStorageEnabled ? 'On' : 'Off'} onPress={() => save({ transcriptStorageEnabled: !profile.transcriptStorageEnabled })} />
+    <SettingRow testID="setting-reminder" label="SESSION REMINDER" value={`${profile.sessionReminderMinutes} min`} onPress={() => save({ sessionReminderMinutes: profile.sessionReminderMinutes === 60 ? 30 : 60 })} />
+    <SettingRow testID="setting-limit" label="MAX DEMO STAKE" value={`${(profile.maxDemoStakeMinorUnits / 100).toFixed(0)} DCO`} onPress={() => save({ maxDemoStakeMinorUnits: profile.maxDemoStakeMinorUnits === 10_000 ? 5_000 : 10_000 })} />
+    <Text style={styles.groupHeading}>DEVICE SESSIONS</Text>
+    {sessions.map(session => <View key={session.id} style={styles.sessionRow}><View><Text style={styles.menuText}>{session.deviceName}</Text><Text style={styles.ledgerDate}>{session.current ? 'CURRENT DEVICE' : session.revokedAt ? 'REVOKED' : `ACTIVE · ${new Date(session.lastSeenAt).toLocaleDateString()}`}</Text></View>{!session.current && !session.revokedAt && <Pressable testID={`revoke-session-${session.id}`} onPress={() => onRevoke(session.id)}><Text style={styles.inlineError}>REVOKE</Text></Pressable>}</View>)}
+  </View>;
+}
+
+function SettingRow({ testID, label, value, onPress }: { testID: string; label: string; value: string; onPress: () => void }) {
+  return <Pressable testID={testID} onPress={onPress} style={styles.menuRow}><Text style={styles.menuText}>{label}</Text><View style={styles.settingValue}><Text style={styles.ticketStatus}>{value.toUpperCase()}</Text><Text style={styles.chevron}>›</Text></View></Pressable>;
 }
 
 function WalletScreen({ wallet, ledger, onBack, onMutate }: { wallet: Wallet | null; ledger: LedgerEntry[]; onBack: () => void; onMutate: (direction: 'deposit' | 'withdraw') => void }) {
@@ -990,6 +1024,9 @@ const styles = StyleSheet.create({
   casinoDisclosure: { margin: 10, padding: 12, backgroundColor: '#24202A', borderLeftWidth: 3, borderLeftColor: '#F0A93B' },
   menuRow: { height: 54, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   menuText: { color: '#E8ECF1', fontSize: 12, fontWeight: '700' },
+  profileCard: { margin: 10, padding: 12, backgroundColor: '#151D28', gap: 8 },
+  settingValue: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sessionRow: { minHeight: 58, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   emptyState: { margin: 22, paddingVertical: 54, alignItems: 'center' },
   emptyIcon: { color: '#398DEB', fontSize: 36 },
   emptyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 14 },

@@ -21,6 +21,7 @@ jest.mock('@feg/api-client', () => ({
   ContextFlowClient: jest.fn().mockImplementation(() => {
     let slip = { id: 'slip-guest-device-0001-1', ownerId: 'guest-device-0001', tab: 1, version: 0, mode: 'accumulator', stake: { currency: 'DCO', minorUnits: 100 }, selections: [] as any[], totals: null as any, warnings: [] as any[], updatedAt: '2026-09-08T12:00:00.000Z' };
     let placedTickets: any[] = [];
+    let profile = { userId: 'guest-device-0001', displayName: 'Demo Player', locale: 'en', oddsFormat: 'decimal', theme: 'dark', notificationsEnabled: true, transcriptStorageEnabled: false, sessionReminderMinutes: 60, maxDemoStakeMinorUnits: 10000, createdAt: '2026-09-08T12:00:00.000Z', updatedAt: '2026-09-08T12:00:00.000Z' };
     const withTotals = (next: typeof slip) => ({ ...next, totals: next.selections.length ? { lines: 1, totalOdds: next.selections.reduce((total, item) => total * item.currentOdds, 1), stakeMinorUnits: next.stake.minorUnits, grossReturnMinorUnits: 648, bonusMinorUnits: 0, feeMinorUnits: 0, taxMinorUnits: 0, potentialReturnMinorUnits: 648 } : null });
     return ({
     getEvents: jest.fn(() => Promise.resolve([])),
@@ -97,6 +98,11 @@ jest.mock('@feg/api-client', () => ({
       { id: 'casino-triple-slots', name: 'Triple Pulse', type: 'slots', tagline: 'Spin three neon reels.', volatility: 'medium', demoOnly: true },
     ])),
     playCasinoGame: jest.fn((gameId: string) => Promise.resolve({ id: 'casino-round-test', gameId, ownerId: 'guest-device-0001', round: 1, outcomeLabel: 'Flight ended at 2.50×', multiplier: 2.5, createdAt: '2026-09-08T12:00:00.000Z', demoOnly: true })),
+    getDemoProfile: jest.fn(() => Promise.resolve(profile)),
+    updateDemoProfile: jest.fn((_userId: string, input: any) => { profile = { ...profile, ...input, updatedAt: '2026-09-08T12:01:00.000Z' }; return Promise.resolve(profile); }),
+    createDemoSession: jest.fn(() => Promise.resolve({ id: 'session-current-0001', userId: 'guest-device-0001', deviceName: 'iPhone / iOS', current: true, createdAt: '2026-09-08T12:00:00.000Z', lastSeenAt: '2026-09-08T12:00:00.000Z' })),
+    getDemoSessions: jest.fn(() => Promise.resolve([{ id: 'session-current-0001', userId: 'guest-device-0001', deviceName: 'iPhone / iOS', current: true, createdAt: '2026-09-08T12:00:00.000Z', lastSeenAt: '2026-09-08T12:00:00.000Z' }])),
+    revokeDemoSession: jest.fn(),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -213,6 +219,15 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
     byTestId('tab-menu').props.onPress(),
   );
   expect(byTestId('menu-screen')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('open-profile-button').props.onPress());
+  expect(byTestId('profile-screen')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('profile-name-input').props.onChangeText('Context Captain'));
+  await ReactTestRenderer.act(async () => { await byTestId('save-profile-button').props.onPress(); });
+  expect(byTestId('profile-name-input').props.value).toBe('Context Captain');
+  await ReactTestRenderer.act(async () => { await byTestId('setting-notifications').props.onPress(); });
+  expect(byTestId('setting-notifications').findAllByProps({ children: 'OFF' }).length).toBeGreaterThan(0);
+  await ReactTestRenderer.act(async () => byTestId('profile-wallet-button').props.onPress());
+  expect(byTestId('wallet-screen')).toBeTruthy();
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

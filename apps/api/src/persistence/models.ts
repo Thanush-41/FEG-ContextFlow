@@ -6,6 +6,8 @@ export const EVENT_DETAIL_MODEL = 'EventDetail';
 export const BET_SLIP_MODEL = 'BetSlip';
 export const WALLET_MODEL = 'Wallet';
 export const LEDGER_ENTRY_MODEL = 'LedgerEntry';
+export const DEMO_PROFILE_MODEL = 'DemoProfile';
+export const DEMO_SESSION_MODEL = 'DemoSession';
 
 const selectionSchema = new Schema(
   { id: { type: String, required: true }, label: { type: String, required: true }, odds: { type: Number, required: true }, previousOdds: Number, state: String, features: [String] },
@@ -100,3 +102,15 @@ export const ledgerEntrySchema = new Schema({
   idempotencyKey: { type: String, required: true, unique: true, index: true }, ticketId: String,
   postings: [postingSchema], createdAt: { type: String, required: true, index: true },
 }, { versionKey: false, timestamps: false });
+
+export const demoProfileSchema = new Schema({
+  userId: { type: String, required: true, unique: true, index: true }, displayName: String,
+  locale: String, oddsFormat: String, theme: String, notificationsEnabled: Boolean,
+  transcriptStorageEnabled: Boolean, sessionReminderMinutes: Number,
+  maxDemoStakeMinorUnits: Number, createdAt: String, updatedAt: String,
+}, { versionKey: false });
+
+export const demoSessionSchema = new Schema({
+  id: { type: String, required: true, unique: true, index: true }, userId: { type: String, required: true, index: true },
+  deviceName: String, current: Boolean, createdAt: String, lastSeenAt: String, revokedAt: String,
+}, { versionKey: false });

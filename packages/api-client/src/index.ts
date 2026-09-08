@@ -4,6 +4,8 @@ import {
   type CopyTicketResult,
   type CasinoGame,
   type CasinoRound,
+  type DemoProfile,
+  type DemoSession,
   type DemoTicket,
   type PlaceDemoBet,
   type OfferResponse,
@@ -134,6 +136,26 @@ export class ContextFlowClient {
 
   playCasinoGame(gameId: string, idempotencyKey: string): Promise<CasinoRound> {
     return this.post(`/api/casino/${encodeURIComponent(gameId)}/play`, { idempotencyKey });
+  }
+
+  getDemoProfile(userId: string): Promise<DemoProfile> {
+    return this.get(`/api/account/${encodeURIComponent(userId)}/profile`);
+  }
+
+  updateDemoProfile(userId: string, input: Partial<Pick<DemoProfile, 'displayName' | 'locale' | 'notificationsEnabled' | 'transcriptStorageEnabled' | 'sessionReminderMinutes' | 'maxDemoStakeMinorUnits'>>): Promise<DemoProfile> {
+    return this.request(`/api/account/${encodeURIComponent(userId)}/profile`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  getDemoSessions(userId: string): Promise<DemoSession[]> {
+    return this.get(`/api/account/${encodeURIComponent(userId)}/sessions`);
+  }
+
+  createDemoSession(userId: string, deviceName: string): Promise<DemoSession> {
+    return this.post(`/api/account/${encodeURIComponent(userId)}/sessions`, { deviceName });
+  }
+
+  revokeDemoSession(userId: string, sessionId: string): Promise<DemoSession> {
+    return this.request(`/api/account/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

@@ -12,14 +12,17 @@ import { TicketPlacementController } from '../src/tickets/ticket-placement.contr
 import { TicketPlacementService } from '../src/tickets/ticket-placement.service.js';
 import { WalletController } from '../src/wallet/wallet.controller.js';
 import { WalletService } from '../src/wallet/wallet.service.js';
+import { AccountService } from '../src/account/account.service.js';
 
 describe('Sprint 10 ticket lifecycle', () => {
   let app: INestApplication;
+  let account: AccountService;
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [SlipsController, WalletController, TicketPlacementController, TicketAdminController],
-      providers: [SportsService, EventDetailService, SlipsService, WalletService, TicketPlacementService, DemoAuthGuard, LiveAdminGuard],
+      providers: [SportsService, EventDetailService, SlipsService, WalletService, TicketPlacementService, AccountService, DemoAuthGuard, LiveAdminGuard],
     }).compile();
+    account = moduleRef.get(AccountService);
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     await app.init();
@@ -77,5 +80,14 @@ describe('Sprint 10 ticket lifecycle', () => {
     const after = await request(app.getHttpServer()).get(`/api/wallets/${owner}`).set(auth).expect(200);
     expect(after.body.availableMinorUnits - before.body.availableMinorUnits).toBe(expectedPayout);
     await request(app.getHttpServer()).post(`/api/tickets/${owner}/${ticket.body.id}/cashout/quote`).set(auth).send({}).expect(409);
+  });
+
+  it('enforces the account demo-stake limit during authoritative placement', async () => {
+    const owner = 'limited-user-0001';
+    const auth = { Authorization: `Bearer ${owner}` };
+    await account.updateProfile(owner, { maxDemoStakeMinorUnits: 100 });
+    const added = await request(app.getHttpServer()).post(`/api/slips/${owner}/tabs/1/selections`).send({ eventId: 'event-chelsea-liverpool', marketId: 'event-chelsea-liverpool-market-0', selectionId: 'event-chelsea-liverpool-outcome-0-0', acceptedOdds: 1.55, expectedVersion: 0 }).expect(201);
+    const slip = await request(app.getHttpServer()).patch(`/api/slips/${owner}/tabs/1`).send({ expectedVersion: added.body.version, stakeMinorUnits: 500 }).expect(200);
+    await request(app.getHttpServer()).post('/api/tickets/place').set(auth).send({ ownerId: owner, tab: 1, expectedVersion: slip.body.version, idempotencyKey: '00000000-0000-4000-8000-000000000999' }).expect(400).expect(({ body }) => expect(body).toMatchObject({ code: 'ACCOUNT_STAKE_LIMIT' }));
   });
 });

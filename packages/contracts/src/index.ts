@@ -373,6 +373,43 @@ export const CasinoRoundSchema = z.object({
 });
 export type CasinoRound = z.infer<typeof CasinoRoundSchema>;
 
+export const DemoProfileSchema = z.object({
+  userId: PublicIdSchema,
+  displayName: z.string().min(2).max(40),
+  locale: z.enum(['en', 'hr']),
+  oddsFormat: z.literal('decimal'),
+  theme: z.literal('dark'),
+  notificationsEnabled: z.boolean(),
+  transcriptStorageEnabled: z.boolean(),
+  sessionReminderMinutes: z.number().int().min(15).max(240),
+  maxDemoStakeMinorUnits: z.number().int().min(100).max(100_000),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type DemoProfile = z.infer<typeof DemoProfileSchema>;
+
+export const UpdateDemoProfileSchema = DemoProfileSchema.pick({
+  displayName: true,
+  locale: true,
+  notificationsEnabled: true,
+  transcriptStorageEnabled: true,
+  sessionReminderMinutes: true,
+  maxDemoStakeMinorUnits: true,
+}).partial().refine(value => Object.keys(value).length > 0, 'At least one profile setting is required.');
+
+export const DemoSessionSchema = z.object({
+  id: PublicIdSchema,
+  userId: PublicIdSchema,
+  deviceName: z.string().min(2).max(80),
+  current: z.boolean(),
+  createdAt: z.string().datetime(),
+  lastSeenAt: z.string().datetime(),
+  revokedAt: z.string().datetime().optional(),
+});
+export type DemoSession = z.infer<typeof DemoSessionSchema>;
+
+export const CreateDemoSessionSchema = z.object({ deviceName: z.string().min(2).max(80) });
+
 export const VoiceSessionStateSchema = z.enum([
   'idle',
   'listening',

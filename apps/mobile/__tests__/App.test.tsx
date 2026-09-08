@@ -7,6 +7,8 @@ import ReactTestRenderer, { ReactTestInstance } from 'react-test-renderer';
 import App, { LiveScreen } from '../App';
 jest.mock('../useLiveFeed', () => ({ useLiveFeed: () => ({ snapshots: {}, status: 'stale', wallet: null, ticket: null, notification: null }) }));
 
+let mockCasinoApiAvailable = true;
+
 jest.mock(
   'react-native-safe-area-context',
   () => jest.requireActual('react-native-safe-area-context/jest/mock').default,
@@ -96,12 +98,17 @@ jest.mock('@feg/api-client', () => ({
     getCashoutQuote: jest.fn((_ownerId: string, ticketId: string) => Promise.resolve({ id: 'quote-test-0001', ticketId, amount: { currency: 'DCO', minorUnits: 150 }, expiresAt: '2026-09-08T12:00:30.000Z' })),
     cashoutTicket: jest.fn((_ownerId: string, ticketId: string) => { const current = placedTickets.find(item => item.id === ticketId); const resolved = { ...current, status: 'cashed_out', resolution: 'cashout', settledAt: '2026-09-08T12:00:10.000Z', payout: { currency: 'DCO', minorUnits: 150 } }; placedTickets = [resolved]; return Promise.resolve(resolved); }),
     copyTicketToSlip: jest.fn(() => Promise.resolve({ slip, unavailableSelectionIds: [], repricedSelectionIds: [] })),
-    getCasinoGames: jest.fn(() => Promise.resolve([
+    getCasinoGames: jest.fn(() => mockCasinoApiAvailable ? Promise.resolve([
       { id: 'casino-crash-flight', name: 'Sky Crash', type: 'crash', tagline: 'Watch the multiplier climb.', volatility: 'high', demoOnly: true },
       { id: 'casino-lucky-dice', name: 'Lucky Dice', type: 'dice', tagline: 'Roll deterministic dice.', volatility: 'low', demoOnly: true },
       { id: 'casino-triple-slots', name: 'Triple Pulse', type: 'slots', tagline: 'Spin three neon reels.', volatility: 'medium', demoOnly: true },
-    ])),
-    playCasinoGame: jest.fn((gameId: string) => Promise.resolve({ id: 'casino-round-test', gameId, ownerId: 'guest-device-0001', round: 1, outcomeLabel: 'Flight ended at 2.50×', multiplier: 2.5, createdAt: '2026-09-08T12:00:00.000Z', demoOnly: true })),
+    ]) : Promise.reject(new Error('offline'))),
+    playCasinoGame: jest.fn((gameId: string) => mockCasinoApiAvailable ? Promise.resolve({
+      id: 'casino-round-test', gameId, ownerId: 'guest-device-0001', round: 1,
+      outcomeLabel: gameId.includes('dice') ? 'Rolled 7' : gameId.includes('slots') ? 'Pair match' : 'Flight ended at 2.50×',
+      ...(gameId.includes('dice') ? { dice: [3, 4] } : gameId.includes('slots') ? { reels: ['7', '7', '●'] } : { multiplier: 2.5 }),
+      createdAt: '2026-09-08T12:00:00.000Z', demoOnly: true,
+    }) : Promise.reject(new Error('offline'))),
     getDemoProfile: jest.fn(() => Promise.resolve(profile)),
     updateDemoProfile: jest.fn((_userId: string, input: any) => { profile = { ...profile, ...input, updatedAt: '2026-09-08T12:01:00.000Z' }; return Promise.resolve(profile); }),
     createDemoSession: jest.fn(() => Promise.resolve({ id: 'session-current-0001', userId: 'guest-device-0001', deviceName: 'iPhone / iOS', current: true, createdAt: '2026-09-08T12:00:00.000Z', lastSeenAt: '2026-09-08T12:00:00.000Z' })),
@@ -232,6 +239,14 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () => byTestId('casino-game-crash').props.onPress());
   await ReactTestRenderer.act(async () => { await byTestId('play-casino-button').props.onPress(); });
   expect(byTestId('casino-result').props.children).toBe('2.50×');
+  await ReactTestRenderer.act(async () => byTestId('casino-back').props.onPress());
+  await ReactTestRenderer.act(async () => byTestId('casino-game-dice').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('play-casino-button').props.onPress(); });
+  expect(byTestId('casino-result').props.children).toBe('3  +  4');
+  await ReactTestRenderer.act(async () => byTestId('casino-back').props.onPress());
+  await ReactTestRenderer.act(async () => byTestId('casino-game-slots').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('play-casino-button').props.onPress(); });
+  expect(byTestId('casino-result').props.children).toBe('7   7   ●');
 
   await ReactTestRenderer.act(async () =>
     byTestId('tab-menu').props.onPress(),
@@ -287,6 +302,28 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   expect(byTestId('competition-competition-demo-league')).toBeTruthy();
   await ReactTestRenderer.act(async () => { await byTestId('favorite-competition-demo-league').props.onPress(); });
   expect(byTestId('favorite-competition-demo-league').props.accessibilityLabel).toBe('Remove Demo League favorite');
+});
+
+test('keeps all Casino games playable in device demo mode when the API is unavailable', async () => {
+  mockCasinoApiAvailable = false;
+  let renderer: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<App />); });
+  const byTestId = (testID: string): ReactTestInstance => renderer!.root.findByProps({ testID });
+
+  await ReactTestRenderer.act(async () => byTestId('tab-casino').props.onPress());
+  await ReactTestRenderer.act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 0)); });
+  expect(byTestId('casino-game-crash')).toBeTruthy();
+  expect(byTestId('casino-game-dice')).toBeTruthy();
+  expect(byTestId('casino-game-slots')).toBeTruthy();
+  expect(byTestId('casino-connection').findByProps({ children: '● DEVICE DEMO MODE' })).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => byTestId('casino-game-crash').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('play-casino-button').props.onPress(); });
+  expect(byTestId('casino-result').props.children).toBe('2.42×');
+  expect(byTestId('casino-connection').findByProps({ children: '● DEVICE DEMO MODE' })).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => renderer!.unmount());
+  mockCasinoApiAvailable = true;
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

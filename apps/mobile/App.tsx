@@ -37,6 +37,34 @@ const fallbackEvents: Event[] = [
   { id: 'inter-milan', label: 'TOP MATCH', league: 'ITALY · SERIE A', starts: 'TOMORROW 02:15', home: 'Inter', away: 'AC Milan', markets: [{ label: '1', value: '2.05', state: 'active' }, { label: 'X', value: '3.25', state: 'locked' }, { label: '2', value: '3.10', state: 'active' }], features: ['tv'], totalMarketCount: 31 },
 ];
 
+const bundledCasinoGames: CasinoGame[] = [
+  { id: 'casino-crash-flight', name: 'Sky Crash', type: 'crash', tagline: 'Watch the multiplier climb before the demo flight ends.', volatility: 'high', demoOnly: true },
+  { id: 'casino-lucky-dice', name: 'Lucky Dice', type: 'dice', tagline: 'Roll two deterministic dice and chase doubles.', volatility: 'low', demoOnly: true },
+  { id: 'casino-triple-slots', name: 'Triple Pulse', type: 'slots', tagline: 'Spin a fast three-reel neon slot simulation.', volatility: 'medium', demoOnly: true },
+];
+
+function createDeviceCasinoRound(game: CasinoGame, round: number): CasinoRound {
+  const common = {
+    id: `device-casino-${game.type}-${round}`,
+    gameId: game.id,
+    ownerId: slipOwnerId,
+    round,
+    createdAt: new Date().toISOString(),
+    demoOnly: true as const,
+  };
+  if (game.type === 'crash') {
+    const multiplier = Number((1.05 + ((round * 137) % 895) / 100).toFixed(2));
+    return { ...common, multiplier, outcomeLabel: `Flight ended at ${multiplier.toFixed(2)}×` };
+  }
+  if (game.type === 'dice') {
+    const dice: [number, number] = [((round * 3) % 6) + 1, ((round * 5 + 1) % 6) + 1];
+    return { ...common, dice, outcomeLabel: dice[0] === dice[1] ? `Doubles ${dice[0]}!` : `Rolled ${dice[0] + dice[1]}` };
+  }
+  const symbols = ['7', '★', '◆', '●', 'BAR'];
+  const reels: [string, string, string] = [symbols[round % symbols.length]!, symbols[(round * 2) % symbols.length]!, symbols[(round * 3) % symbols.length]!];
+  return { ...common, reels, outcomeLabel: reels.every(symbol => symbol === reels[0]) ? 'Triple match!' : reels[0] === reels[1] || reels[1] === reels[2] ? 'Pair match' : 'Spin complete' };
+}
+
 const liveActivity = NativeModules.CounterLiveActivityModule as CounterLiveActivityModule | undefined;
 
 function apiBaseUrl() {
@@ -114,10 +142,14 @@ function App() {
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
   const [slipBusy, setSlipBusy] = useState(false);
-  const [casinoGames, setCasinoGames] = useState<CasinoGame[]>([]);
+  const [casinoGames, setCasinoGames] = useState<CasinoGame[]>(bundledCasinoGames);
   const [casinoGame, setCasinoGame] = useState<CasinoGame | null>(null);
   const [casinoRound, setCasinoRound] = useState<CasinoRound | null>(null);
   const [casinoBusy, setCasinoBusy] = useState(false);
+  const [casinoLoading, setCasinoLoading] = useState(false);
+  const [casinoConnected, setCasinoConnected] = useState(false);
+  const [casinoNotice, setCasinoNotice] = useState('Connecting to the demo round service…');
+  const deviceCasinoRounds = useRef<Record<string, number>>({});
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
 
@@ -214,9 +246,25 @@ function App() {
     return () => { current = false; };
   }, [periodFilter]);
 
+  const refreshCasino = useCallback(async () => {
+    setCasinoLoading(true);
+    try {
+      const games = await api.getCasinoGames();
+      setCasinoGames(games.length ? games : bundledCasinoGames);
+      setCasinoConnected(true);
+      setCasinoNotice('Demo round service connected.');
+    } catch {
+      setCasinoGames(bundledCasinoGames);
+      setCasinoConnected(false);
+      setCasinoNotice('API unavailable. Device demo mode keeps all three games playable.');
+    } finally {
+      setCasinoLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (activeTab === 'Casino' && !casinoGames.length) api.getCasinoGames().then(setCasinoGames).catch(() => undefined);
-  }, [activeTab, casinoGames.length]);
+    if (activeTab === 'Casino') refreshCasino();
+  }, [activeTab, refreshCasino]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !liveActivity) { setIsCountLoaded(true); return; }
@@ -385,8 +433,17 @@ function App() {
 
   const playCasino = async (game: CasinoGame) => {
     setCasinoBusy(true);
-    try { setCasinoRound(await api.playCasinoGame(game.id, `ca510000-1127-45b1-ab01-${String(Date.now()).slice(-12)}`)); }
-    catch (error) { Alert.alert('Demo casino', error instanceof Error ? error.message : 'Unable to play this demo round.'); }
+    try {
+      setCasinoRound(await api.playCasinoGame(game.id, `ca510000-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`));
+      setCasinoConnected(true);
+      setCasinoNotice('Demo round service connected.');
+    } catch {
+      const nextRound = (deviceCasinoRounds.current[game.id] ?? 0) + 1;
+      deviceCasinoRounds.current[game.id] = nextRound;
+      setCasinoRound(createDeviceCasinoRound(game, nextRound));
+      setCasinoConnected(false);
+      setCasinoNotice('API unavailable. This round ran safely on your device in demo mode.');
+    }
     finally { setCasinoBusy(false); }
   };
 
@@ -435,7 +492,7 @@ function App() {
           {activeTab === 'Live' && !detailEvent && <View><Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.status === 'current' ? 'Live feed connected · Demo simulation' : 'Live feed reconnecting · Prices may be stale'}</Text>{liveFeed.notification && <Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.notification}</Text>}<LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={liveFeed.status === 'current' ? toggleOfferOdd : () => Alert.alert('Live feed unavailable', 'Wait for the current prices to reconnect.')} onOpen={setDetailEvent} />{Object.values(liveFeed.snapshots).filter(snapshot => snapshot.event.status === 'live').map(snapshot => <View key={snapshot.eventId} style={styles.infoCard}><Text style={styles.infoTitle}>{snapshot.event.sport} · {snapshot.period} · {snapshot.running ? 'Simulation running' : 'Simulation paused'}</Text>{snapshot.incidents.slice(-5).map(incident => <Text key={incident.id} style={styles.infoBody}>{Math.floor(incident.clockSeconds / 60)}′ {incident.label}</Text>)}</View>)}</View>}
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
-          {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
+          {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} loading={casinoLoading} connected={casinoConnected} notice={casinoNotice} onRetry={refreshCasino} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
           {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : discoveryOpen ? <DiscoveryScreen route={discoveryOpen} promotions={promotions} content={content} onBack={() => setDiscoveryOpen(null)} onOptIn={async promotionId => { const updated = await api.optInPromotion(promotionId); setPromotions(current => current.map(item => item.id === updated.id ? updated : item)); }} /> : communityOpen ? <CommunityScreen posts={communityPosts} onBack={() => setCommunityOpen(false)} onReact={async postId => { const updated = await api.toggleCommunityReaction(postId); setCommunityPosts(current => current.map(item => item.id === updated.id ? updated : item)); }} onCopy={async postId => { if (!slip) return; const result = await api.copyCommunityPostToSlip(postId, slipTab, slip.version); setSlip(result.slip); setCommunityOpen(false); setActiveTab('Sport'); setSlipView('expanded'); if (result.unavailableSelectionIds.length) Alert.alert('Shared ticket', `${result.unavailableSelectionIds.length} selection(s) were unavailable.`); }} /> : lottoOpen ? <LottoScreen draws={lottoDraws} entries={lottoEntries} onBack={() => setLottoOpen(false)} onSubmit={async (drawId, numbers) => { const entry = await api.createLottoEntry(drawId, numbers, `10770000-1127-45b1-ab01-${String(Date.now()).slice(-12)}`); setLottoEntries(current => [entry, ...current.filter(item => item.id !== entry.id)]); }} /> : virtualsOpen ? <VirtualsScreen events={virtualEvents} result={virtualResult} onBack={() => { setVirtualsOpen(false); setVirtualResult(null); }} onPlay={async eventId => setVirtualResult(await api.playVirtualEvent(eventId, `a1170000-1127-45b1-ab01-${String(Date.now()).slice(-12)}`))} /> : resultsOpen ? <ResultsScreen dashboard={results} onBack={() => setResultsOpen(false)} onFavorite={async id => { const table = await api.toggleCompetitionFavorite(id); setResults(current => current ? { ...current, tables: current.tables.map(item => item.id === table.id ? table : item) } : current); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} onDiscovery={openDiscovery} onCommunity={openCommunity} onLotto={openLotto} onVirtuals={openVirtuals} onResults={openResults} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
@@ -731,10 +788,11 @@ function ReceiptRow({ label, value, highlight = false }: { label: string; value:
   return <View style={styles.receiptRow}><Text style={styles.stakeLabel}>{label}</Text><Text style={[styles.stakeValue, highlight && styles.receiptHighlight]}>{value}</Text></View>;
 }
 
-function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { games: CasinoGame[]; game: CasinoGame | null; round: CasinoRound | null; busy: boolean; onOpen: (game: CasinoGame) => void; onBack: () => void; onPlay: (game: CasinoGame) => void }) {
+function CasinoScreen({ games, game, round, busy, loading, connected, notice, onRetry, onOpen, onBack, onPlay }: { games: CasinoGame[]; game: CasinoGame | null; round: CasinoRound | null; busy: boolean; loading: boolean; connected: boolean; notice: string; onRetry: () => void; onOpen: (game: CasinoGame) => void; onBack: () => void; onPlay: (game: CasinoGame) => void }) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   if (game) return <View testID="casino-screen">
     <View style={styles.screenHeading}><Pressable testID="casino-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>{game.name.toUpperCase()}</Text><Text style={styles.ticketStatus}>DEMO ONLY</Text></View>
+    <View testID="casino-connection" style={styles.casinoDisclosure}><Text style={connected ? styles.ticketStatus : styles.slipWarningCode}>{connected ? '● SERVICE CONNECTED' : '● DEVICE DEMO MODE'}</Text><Text style={styles.infoBody}>{notice}</Text></View>
     <View style={[styles.casinoStage, game.type === 'crash' ? styles.casinoCrash : game.type === 'dice' ? styles.casinoDice : styles.casinoSlots]}>
       <Text style={styles.casinoStageLabel}>{game.type === 'crash' ? 'FLIGHT MULTIPLIER' : game.type === 'dice' ? 'LUCKY ROLL' : 'NEON REELS'}</Text>
       <Text testID="casino-result" style={styles.casinoResult}>{round ? game.type === 'crash' ? `${round.multiplier?.toFixed(2)}×` : game.type === 'dice' ? round.dice?.join('  +  ') : round.reels?.join('   ') : game.type === 'crash' ? '1.00×' : game.type === 'dice' ? '⚀  ⚀' : '◆   ●   ★'}</Text>
@@ -747,9 +805,9 @@ function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { ga
   return <View testID="casino-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>CASINO</Text><Text style={styles.ticketStatus}>3 PLAYABLE DEMOS</Text></View>
     <View style={styles.casinoHero}><Text style={styles.casinoHeroEyebrow}>FEG PLAY LAB</Text><Text style={styles.casinoHeroTitle}>Three games. Instant demo rounds.</Text><Text style={styles.infoBody}>Native simulations built for this app—no WebView and no real-money play.</Text></View>
+    <View testID="casino-connection" style={styles.casinoDisclosure}><View style={styles.gameTileTop}><Text style={connected ? styles.ticketStatus : styles.slipWarningCode}>{connected ? '● SERVICE CONNECTED' : loading ? '● CONNECTING' : '● DEVICE DEMO MODE'}</Text><Pressable testID="retry-casino-button" disabled={loading} onPress={onRetry}><Text style={styles.linkText}>{loading ? 'CHECKING…' : 'RETRY'}</Text></Pressable></View><Text style={styles.infoBody}>{notice}</Text></View>
     <View style={styles.casinoGrid}>{games.map((item, index) =>
       <Pressable key={item.id} testID={`casino-game-${item.type}`} onPress={() => onOpen(item)} style={[styles.gameTile, index === 0 && styles.gameTileFeatured]}><View style={styles.gameTileTop}><Text style={styles.gameBadge}>DEMO</Text><Pressable testID={`casino-favorite-${item.type}`} onPress={() => setFavorites(current => { const next = new Set(current); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; })}><Text style={[styles.detailFavorite, favorites.has(item.id) && styles.eventFavoriteActive]}>★</Text></Pressable></View><Text style={styles.gameGlyph}>{item.type === 'crash' ? '↗' : item.type === 'dice' ? '⚄' : '777'}</Text><Text style={styles.gameTitle}>{item.name}</Text><Text style={styles.gameTagline}>{item.tagline}</Text></Pressable>)}</View>
-    {!games.length && <OfferSkeleton />}
   </View>;
 }
 

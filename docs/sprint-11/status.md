@@ -26,3 +26,18 @@ Status: **Acceptance complete — 2026-09-09**
   before the sprint commit.
 
 The abandoned standalone HTML concept remains excluded.
+
+## Device-connectivity repair — 2026-09-09
+
+- Root cause: Casino was the first screen with no bundled fallback. When a physical
+  device could not reach the development API, the catalogue request error was
+  discarded and the UI remained on an unexplained loading skeleton.
+- The three-game catalogue is now bundled with the native app and remains usable
+  while the API reconnects.
+- Casino now exposes `connecting`, `service connected`, and `device demo mode`
+  states with a manual retry action instead of swallowing failures.
+- If the round service is unreachable, Crash, Dice, and Slots execute deterministic
+  no-cash-value rounds locally. Server rounds remain the preferred path and resume
+  automatically after reconnection.
+- Mobile acceptance now exercises all three server-backed result shapes and the
+  disconnected device-demo fallback.

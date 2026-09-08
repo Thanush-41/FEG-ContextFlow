@@ -15,6 +15,7 @@ architecture, and quality boundaries are established.
 - [QA strategy](qa-strategy.md)
 - [Voice-agent product contract](voice-agent-contract.md)
 - [Design review](design-review.md)
+- [Video reference audit](video-reference-audit.md)
 - [Live status](status.md)
 
 ## Exit decision

@@ -10,60 +10,71 @@ session through native system surfaces. It must never imply real-money betting.
 Voice is a primary tab and persistent state, not a floating novelty button.
 Touch and voice must expose equivalent information and safe recovery paths.
 
-## Visual direction
+## Visual direction — recording-matched
 
-Use a confident native sports-data aesthetic: information-dense but calm,
-high-contrast, fast to scan, and free of copied sportsbook branding. The base is
-deep navy with cool elevated surfaces; electric lime marks available odds and
-confirmed positive states; sky blue marks navigation and voice focus; amber and
-red are reserved for warnings, live state and destructive actions.
+The supplied “Mobile View & Native apps” recording is the visual ground truth.
+Match its compact, dark, mobile sportsbook structure: a saturated royal-blue
+brand bar; charcoal time filters; near-black canvas; edge-to-edge promotional
+tiles; a compact icon category row; dense slate event cards; small rectangular
+odds cells; horizontal league chips; and a fixed black five-item bottom bar.
+
+Preserve the recording's tight vertical rhythm and small information scale. Do
+not reinterpret it as a spacious modern card layout, introduce large rounded
+panels, or add a persistent assistant panel over event content. Replace the PSK
+name, logo and third-party artwork with original FEG ContextFlow/demo-safe
+content while retaining position, proportion, density and interaction hierarchy.
 
 ## Tokens
 
 ### Color
 
-- `ink.950 #07111F` — dark canvas and status bars
-- `ink.900 #0C1828` — primary background
-- `ink.800 #132238` — cards and navigation
-- `ink.700 #1C304A` — elevated/pressed surfaces
-- `slate.300 #A9B8CB` — secondary text
-- `white #F8FBFF` — primary text
-- `lime.400 #B7F34A` — odds, success and primary action
-- `lime.950 #172608` — text on lime
-- `sky.400 #44B9FF` — links, voice focus and selected navigation
-- `violet.400 #9B8CFF` — agent reasoning/processing accent
-- `amber.400 #FFBE3F` — changed odds and attention
-- `red.400 #FF5C66` — live/error/destructive state
-- `stroke rgba(255,255,255,0.10)` — dark separators
+- `brand.600 #1264C5` — recording-matched primary header blue
+- `brand.500 #1976D2` — active underline, icon and focus blue
+- `brand.800 #0A4789` — pressed header state
+- `canvas #05090D` — page and rail background
+- `surface.900 #111823` — bottom navigation and deepest cards
+- `surface.800 #182131` — event and ticket cards
+- `surface.700 #303642` — time filter and odds-strip backgrounds
+- `surface.600 #5A5F68` — inactive/summary strips
+- `text.primary #F4F6F9` — primary labels and values
+- `text.secondary #A8AFBA` — metadata and secondary labels
+- `line #252D39` — separators
+- `success #20A20E` — demo submit button and success state
+- `warning #F4CB18` — casino jackpot/value bars only
+- `live #E22B33` — live/jackpot/error badge
+- `voice #1976D2` — microphone focus within the existing header/action grammar
 
-Light theme uses `#F3F7FC` canvas, white cards, `#10213A` primary text,
-`#56677D` secondary text and `#D8E1EC` separators while preserving semantic
-accents and WCAG contrast.
+The demo follows the recording's dark theme. A light palette may be defined for
+later accessibility work but must not appear in the reference-matched demo.
 
 ### Type
 
-Use the native system sans family (SF Pro on iOS, Roboto on Android) to preserve
-platform fidelity and avoid font loading. Scale: 11 metadata, 13 secondary, 15
-body, 17 emphasized body, 22 section title, 28 screen title, 36 key score/value.
+Use Roboto/system sans to match the Android recording and native system sans on
+iOS. Scale: 9–10 bottom labels and metadata, 11 odds labels, 12 body, 13 card
+emphasis, 15 section labels, and 18 brand/header. Avoid oversized page titles.
 Use tabular figures for scores, odds, stakes, balances and clocks.
 
 ### Spacing and shape
 
-Four-point spacing grid: 4, 8, 12, 16, 20, 24, 32. Screen gutter is 16 on
-compact phones and 20 on large phones. Radii: 8 compact controls, 12 odds/card,
-16 panels, and full pill for status/actions. Touch targets are at least 44 by 44.
-Use borders and tonal elevation before shadows; shadows are subtle and reserved
-for the active slip or modal layer.
+Four-point spacing grid: 2, 4, 8, 12, 16. Major content is edge-to-edge with
+8-pixel inner gutters. Time/category bars are 36–44 high. Event cards use 4–6
+pixel radii; odds cells are compact rectangles, not pills. League chips use an
+8-pixel radius. Bottom navigation is 52–58 high plus the safe area. Preserve a
+44-point hit target through invisible padding even when the visible icon is small.
+Use separators and tonal elevation; do not add floating shadows.
 
 ## Core components
 
-- Top app bar with product mark/name, search, notifications and demo balance.
-- Five-item native bottom tab bar with Voice centered and visually persistent.
-- Sport/league chips, live badge, event row, score cell, odds button states.
+- Thin royal-blue app bar with left-aligned FEG mark, search, notifications,
+  compact demo balance/account action and an optional microphone action.
+- Charcoal time filter immediately below: Live, Today, 1H, 3H, Tomorrow.
+- Edge-to-edge horizontal promo tiles followed by a compact icon category row.
+- Five-item recording-matched bottom bar: Live, Sport, Tickets, Casino, Menu.
+- League chips, live badge, dense event card, score cell and compact odds states.
 - Collapsible market group, empty/suspended/loading/error variants.
 - Bet-slip tray, selection row, stake field, totals and confirmation sheet.
-- Voice session bar and full voice screen with listening waveform, concise
-  transcript, tool-result cards, disambiguation choices and action preview.
+- Voice uses the header microphone, dedicated full screen, notification/widget,
+  or Live Activity. It must not cover sportsbook content in the reference demo.
 - Toast/banner, skeleton, empty state, offline/reconnecting banner and sheet.
 
 Odds button states are available, selected, pressed, price-up, price-down,
@@ -71,13 +82,16 @@ suspended and unavailable. Do not communicate movement or status by color alone.
 
 ## Layout and behavior
 
-Prioritize the offer and live data above promotional material. Keep score,
-participant and primary odds aligned across rows. Use progressive disclosure for
-secondary markets. Bet slip remains reachable without covering navigation.
+Follow the recording order exactly: brand bar, time filters, promotions,
+category shortcuts, event cards, horizontal league chips, then fixed bottom
+navigation. Keep score, participant and odds aligned. The bet slip rises from
+the bottom above navigation and uses compact gray stake presets with a full-width
+green demo-submit bar, matching the reference hierarchy.
 
-Small phones use one-column lists and full-screen sheets. Large phones may show
-event detail with a persistent slip rail only when both panes retain readable
-width. Landscape layouts must respect notches and Dynamic Island safe areas.
+Small phones use the recording's narrow single-column layout and horizontally
+scrolling rails. Larger phones increase side gutters but do not inflate card
+height or typography. Landscape layouts respect notches and Dynamic Island safe
+areas without changing the content order.
 
 Motion is functional: 120–180 ms state transitions, 220–280 ms sheet movement,
 reduced-motion alternatives, no endless decorative animation. Voice listening

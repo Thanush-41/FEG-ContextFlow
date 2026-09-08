@@ -6,30 +6,36 @@
       "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
       "activeDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
       "designSystemPath": ".superdesign/design-system.md",
-      "referenceIds": [],
+      "referenceIds": [
+        "661ace53-837a-41bd-973a-b9196d8aa9b3",
+        "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa",
+        "37bede77-ec02-4c48-b7ad-ded7c2124161"
+      ],
       "contextFiles": [
         ".superdesign/design-system.md",
         ".superdesign/init/theme.md",
         "App.tsx",
         "docs/sprint-1/information-architecture.md",
-        "docs/sprint-1/voice-agent-contract.md"
+        "docs/sprint-1/voice-agent-contract.md",
+        "docs/sprint-1/video-reference-audit.md"
       ],
       "fingerprints": {
-        ".superdesign/design-system.md": "15eb888c1b49095371a30dcc91a398e75bedb7ebe096fc48f0019452cab0e845",
+        ".superdesign/design-system.md": "f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d",
         ".superdesign/init/theme.md": "3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb",
         "App.tsx": "477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1",
         "docs/sprint-1/information-architecture.md": "c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6",
-        "docs/sprint-1/voice-agent-contract.md": "880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e"
+        "docs/sprint-1/voice-agent-contract.md": "880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e",
+        "docs/sprint-1/video-reference-audit.md": "7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"
       },
       "components": [],
       "drafts": {
         "05763945-1fbe-4e71-b80f-aa13476386f4": {
           "title": "FEG ContextFlow - Sports Offer",
-          "visualDirection": "dark native sports-data shell with persistent voice agent",
-          "currentVersion": 1
+          "visualDirection": "recording-matched compact blue and charcoal sportsbook shell with unobtrusive voice entry",
+          "currentVersion": 2
         }
       },
-      "updatedAt": "2026-09-08T12:11:50.122Z"
+      "updatedAt": "2026-09-08T12:35:06Z"
     }
   }
 }

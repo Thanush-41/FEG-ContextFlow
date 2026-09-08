@@ -469,6 +469,24 @@ export const LottoEntrySchema = z.object({
 });
 export type LottoEntry = z.infer<typeof LottoEntrySchema>;
 
+export const VirtualEventSchema = z.object({
+  id: PublicIdSchema, sport: z.enum(['football', 'basketball', 'racing']), home: z.string().min(1), away: z.string().min(1),
+  startsInSeconds: z.number().int().nonnegative(), round: z.number().int().positive(), demoOnly: z.literal(true),
+});
+export type VirtualEvent = z.infer<typeof VirtualEventSchema>;
+export const VirtualResultSchema = z.object({
+  id: PublicIdSchema, eventId: PublicIdSchema, sport: z.enum(['football', 'basketball', 'racing']), home: z.string(), away: z.string(),
+  homeScore: z.number().int().nonnegative(), awayScore: z.number().int().nonnegative(), outcome: z.string().min(1),
+  round: z.number().int().positive(), playedAt: z.string().datetime(), demoOnly: z.literal(true),
+});
+export type VirtualResult = z.infer<typeof VirtualResultSchema>;
+export const CompetitionTableSchema = z.object({
+  id: PublicIdSchema, name: z.string().min(1), favorite: z.boolean(), rows: z.array(z.object({ position: z.number().int().positive(), team: z.string(), played: z.number().int().nonnegative(), points: z.number().int().nonnegative() })),
+});
+export type CompetitionTable = z.infer<typeof CompetitionTableSchema>;
+export const ResultsDashboardSchema = z.object({ fixtures: z.array(SportsEventSchema), virtual: z.array(VirtualResultSchema), tables: z.array(CompetitionTableSchema) });
+export type ResultsDashboard = z.infer<typeof ResultsDashboardSchema>;
+
 export const CreateDemoSessionSchema = z.object({ deviceName: z.string().min(2).max(80) });
 
 export const VoiceSessionStateSchema = z.enum([

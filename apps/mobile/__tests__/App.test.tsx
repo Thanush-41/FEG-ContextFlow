@@ -24,6 +24,8 @@ jest.mock('@feg/api-client', () => ({
     let profile = { userId: 'guest-device-0001', displayName: 'Demo Player', locale: 'en', oddsFormat: 'decimal', theme: 'dark', notificationsEnabled: true, transcriptStorageEnabled: false, sessionReminderMinutes: 60, maxDemoStakeMinorUnits: 10000, createdAt: '2026-09-08T12:00:00.000Z', updatedAt: '2026-09-08T12:00:00.000Z' };
     let promotions = [{ id: 'promo-live-boost', title: 'Live Match Boost', summary: 'Explore one featured live market.', rewardLabel: 'DEMO BOOST', terms: ['Demo coins only.'], eligible: true, optedIn: false, expiresAt: '2027-01-31T23:59:59.000Z', demoOnly: true }];
     let lottoEntries: any[] = [];
+    let virtualHistory: any[] = [];
+    let competitionFavorite = false;
     const withTotals = (next: typeof slip) => ({ ...next, totals: next.selections.length ? { lines: 1, totalOdds: next.selections.reduce((total, item) => total * item.currentOdds, 1), stakeMinorUnits: next.stake.minorUnits, grossReturnMinorUnits: 648, bonusMinorUnits: 0, feeMinorUnits: 0, taxMinorUnits: 0, potentialReturnMinorUnits: 648 } : null });
     return ({
     getEvents: jest.fn(() => Promise.resolve([])),
@@ -115,6 +117,10 @@ jest.mock('@feg/api-client', () => ({
     getLottoDraws: jest.fn(() => Promise.resolve([{ id: 'lotto-draw-friday', title: 'Friday Five', drawAt: '2026-09-11T19:00:00.000Z', status: 'open', jackpotDcoMinorUnits: 250000000, winningNumbers: null, demoOnly: true }, { id: 'lotto-draw-last', title: 'Tuesday Five', drawAt: '2026-09-08T19:00:00.000Z', status: 'drawn', jackpotDcoMinorUnits: 180000000, winningNumbers: [4, 11, 18, 23, 32], demoOnly: true }])),
     getLottoEntries: jest.fn(() => Promise.resolve(lottoEntries)),
     createLottoEntry: jest.fn((drawId: string, numbers: number[], idempotencyKey: string) => { const entry = { id: 'lotto-entry-test', ownerId: 'guest-device-0001', drawId, numbers, status: 'pending', createdAt: '2026-09-09T00:00:00.000Z', idempotencyKey, demoOnly: true }; lottoEntries = [entry]; return Promise.resolve(entry); }),
+    getVirtualEvents: jest.fn(() => Promise.resolve([{ id: 'virtual-football-01', sport: 'football', home: 'Blue City', away: 'Red United', startsInSeconds: 45, round: 1, demoOnly: true }])),
+    playVirtualEvent: jest.fn((eventId: string) => { const result = { id: 'virtual-result-test', eventId, sport: 'football', home: 'Blue City', away: 'Red United', homeScore: 2, awayScore: 1, outcome: 'Blue City wins', round: 1, playedAt: '2026-09-09T00:00:00.000Z', demoOnly: true }; virtualHistory = [result]; return Promise.resolve(result); }),
+    getResults: jest.fn(() => Promise.resolve({ fixtures: [{ id: 'finished-game', sport: 'Basketball', league: 'Demo League', startsAt: '2026-09-08T18:00:00.000Z', status: 'finished', score: '88–82', home: 'City Hoops', away: 'United Five', features: [], markets: [] }], virtual: virtualHistory, tables: [{ id: 'competition-demo-league', name: 'Demo League', favorite: competitionFavorite, rows: [{ position: 1, team: 'City Hoops', played: 8, points: 18 }] }] })),
+    toggleCompetitionFavorite: jest.fn(() => { competitionFavorite = !competitionFavorite; return Promise.resolve({ id: 'competition-demo-league', name: 'Demo League', favorite: competitionFavorite, rows: [{ position: 1, team: 'City Hoops', played: 8, points: 18 }] }); }),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -271,6 +277,16 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   expect(byTestId('save-lotto-entry').props.disabled).toBe(false);
   await ReactTestRenderer.act(async () => { await byTestId('save-lotto-entry').props.onPress(); });
   expect(byTestId('lotto-entry-lotto-entry-test')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('lotto-back').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-virtuals-button').props.onPress(); });
+  expect(byTestId('virtual-football')).toBeTruthy();
+  await ReactTestRenderer.act(async () => { await byTestId('play-virtual-football').props.onPress(); });
+  expect(byTestId('virtual-result')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('virtuals-back').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-results-button').props.onPress(); });
+  expect(byTestId('competition-competition-demo-league')).toBeTruthy();
+  await ReactTestRenderer.act(async () => { await byTestId('favorite-competition-demo-league').props.onPress(); });
+  expect(byTestId('favorite-competition-demo-league').props.accessibilityLabel).toBe('Remove Demo League favorite');
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

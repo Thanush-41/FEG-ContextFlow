@@ -34,6 +34,8 @@ import { CommunityController } from './community/community.controller.js';
 import { CommunityService } from './community/community.service.js';
 import { LottoController } from './lotto/lotto.controller.js';
 import { LottoService } from './lotto/lotto.service.js';
+import { VirtualsController } from './virtuals/virtuals.controller.js';
+import { VirtualsService } from './virtuals/virtuals.service.js';
 import {
   BET_SLIP_MODEL,
   DEMO_TICKET_MODEL,
@@ -78,7 +80,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController, AccountController, DiscoveryController, CommunityController, LottoController],
-  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, AccountService, DiscoveryService, CommunityService, LottoService, DemoAuthGuard, LiveAdminGuard],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController, AccountController, DiscoveryController, CommunityController, LottoController, VirtualsController],
+  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, AccountService, DiscoveryService, CommunityService, LottoService, VirtualsService, DemoAuthGuard, LiveAdminGuard],
 })
 export class AppModule {}

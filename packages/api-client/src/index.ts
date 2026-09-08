@@ -13,6 +13,10 @@ import {
   type CommunityPost,
   type LottoDraw,
   type LottoEntry,
+  type VirtualEvent,
+  type VirtualResult,
+  type ResultsDashboard,
+  type CompetitionTable,
   type PlaceDemoBet,
   type OfferResponse,
   type OfferTimeFilter,
@@ -197,6 +201,11 @@ export class ContextFlowClient {
   createLottoEntry(drawId: string, numbers: number[], idempotencyKey: string): Promise<LottoEntry> {
     return this.post(`/api/lotto/draws/${encodeURIComponent(drawId)}/entries`, { numbers, idempotencyKey });
   }
+
+  getVirtualEvents(): Promise<VirtualEvent[]> { return this.get('/api/virtuals/events'); }
+  playVirtualEvent(eventId: string, idempotencyKey: string): Promise<VirtualResult> { return this.post(`/api/virtuals/events/${encodeURIComponent(eventId)}/play`, { idempotencyKey }); }
+  getResults(): Promise<ResultsDashboard> { return this.get('/api/results'); }
+  toggleCompetitionFavorite(competitionId: string): Promise<CompetitionTable> { return this.post(`/api/results/competitions/${encodeURIComponent(competitionId)}/favorite`, {}); }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
     const token = await this.getAccessToken();

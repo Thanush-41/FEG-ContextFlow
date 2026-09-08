@@ -35,6 +35,7 @@ app_group = project.main_group.find_subpath('FEGContextFlow', false)
 extension_group = project.main_group.find_subpath('CounterLiveActivity', true)
 
 shared_attributes = file_reference(shared_group, 'Shared/CounterActivityAttributes.swift')
+shared_voice = file_reference(shared_group, 'Shared/CounterVoiceSession.swift')
 bridge_swift = file_reference(app_group, 'FEGContextFlow/CounterLiveActivityModule.swift')
 bridge_objc = file_reference(app_group, 'FEGContextFlow/CounterLiveActivityModule.m')
 widget_bundle = file_reference(extension_group, 'CounterLiveActivity/CounterLiveActivityBundle.swift')
@@ -45,15 +46,17 @@ file_reference(extension_group, 'CounterLiveActivity/CounterLiveActivity.entitle
 file_reference(app_group, 'FEGContextFlow/FEGContextFlow.entitlements')
 
 add_source(app_target, shared_attributes)
+add_source(app_target, shared_voice)
 add_source(app_target, bridge_swift)
 add_source(app_target, bridge_objc)
 add_source(extension_target, shared_attributes)
+add_source(extension_target, shared_voice)
 add_source(extension_target, widget_bundle)
 add_source(extension_target, widget_view)
 add_source(extension_target, home_widget)
 
 frameworks = project.frameworks_group
-framework_names = %w[ActivityKit WidgetKit SwiftUI UserNotifications]
+framework_names = %w[ActivityKit AppIntents AVFoundation Speech WidgetKit SwiftUI UserNotifications]
 framework_names.each do |name|
   path = "System/Library/Frameworks/#{name}.framework"
   reference = frameworks.files.find { |file| file.path == path }
@@ -68,10 +71,12 @@ end
 app_target.frameworks_build_phase.add_file_reference(activity_kit, true) unless
   app_target.frameworks_build_phase.files_references.include?(activity_kit)
 
-%w[WidgetKit UserNotifications].each do |name|
+%w[AppIntents WidgetKit UserNotifications Speech AVFoundation].each do |name|
+  path = "System/Library/Frameworks/#{name}.framework"
   reference = frameworks.files.find do |file|
-    file.path == "System/Library/Frameworks/#{name}.framework"
+    file.path == path
   end
+  reference ||= frameworks.new_file(path)
   app_target.frameworks_build_phase.add_file_reference(reference, true) unless
     app_target.frameworks_build_phase.files_references.include?(reference)
 end

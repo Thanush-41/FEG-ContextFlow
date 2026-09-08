@@ -14,6 +14,14 @@ and show the current count. To add the widget, long-press the iPhone Home
 Screen, choose **Edit > Add Widget**, search for **FEG Counter**, and select a
 size. The widget refreshes whenever the count changes in the app.
 
+While the Live Activity is running, tap **Start Voice Input** and speak. The
+counter increases by the number of recognized words as the transcript changes.
+After granting Microphone and Speech Recognition permissions once in the app,
+use the **Speak** button on the Home Screen widget or Lock Screen Live Activity
+without opening the app. Long-press the Dynamic Island to expand it and reveal
+the same Start/Stop voice control. This background system-surface control
+requires iOS 18 or later.
+
 ## Install dependencies
 
 ```sh

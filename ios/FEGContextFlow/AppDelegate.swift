@@ -42,6 +42,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   ) {
     completionHandler([.banner, .sound])
   }
+
+  func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    RCTLinkingManager.application(app, open: url, options: options)
+  }
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {

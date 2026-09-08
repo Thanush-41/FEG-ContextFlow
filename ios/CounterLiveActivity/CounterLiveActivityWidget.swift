@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -19,10 +20,19 @@ struct CounterLiveActivityWidget: Widget {
         }
 
         Spacer()
+
+        if #available(iOSApplicationExtension 18.0, *) {
+          Button(intent: ToggleCounterVoiceIntent()) {
+            Image(systemName: context.state.isListening ? "stop.fill" : "mic.fill")
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(context.state.isListening ? .red : .indigo)
+        }
       }
       .padding()
       .activityBackgroundTint(Color.indigo.opacity(0.12))
       .activitySystemActionForegroundColor(.indigo)
+      .widgetURL(URL(string: "fegcontextflow://voice"))
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
@@ -37,9 +47,20 @@ struct CounterLiveActivityWidget: Widget {
         }
 
         DynamicIslandExpandedRegion(.bottom) {
-          Text("FEG ContextFlow counter")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          if #available(iOSApplicationExtension 18.0, *) {
+            Button(intent: ToggleCounterVoiceIntent()) {
+              Label(
+                context.state.isListening ? "Stop voice counting" : "Start voice counting",
+                systemImage: context.state.isListening ? "stop.fill" : "mic.fill"
+              )
+              .font(.caption.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(context.state.isListening ? .red : .indigo)
+          } else {
+            Text("Open FEG ContextFlow to speak")
+              .font(.caption)
+          }
         }
       } compactLeading: {
         Image(systemName: "number")
@@ -54,6 +75,7 @@ struct CounterLiveActivityWidget: Widget {
           .monospacedDigit()
       }
       .keylineTint(.indigo)
+      .widgetURL(URL(string: "fegcontextflow://voice"))
     }
   }
 }

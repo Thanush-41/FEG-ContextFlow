@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Linking,
+  NativeEventEmitter,
   NativeModules,
   Platform,
   Pressable,
@@ -16,7 +18,18 @@ type CounterLiveActivityModule = {
   update: (count: number) => Promise<void>;
   end: () => Promise<void>;
   saveCount: (count: number) => void;
+  getSavedCount: () => Promise<number>;
   sendNotification: (count: number) => Promise<void>;
+  isActive: () => Promise<boolean>;
+  startVoiceRecognition: () => Promise<void>;
+  stopVoiceRecognition: () => Promise<void>;
+};
+
+type VoiceProgress = {
+  transcript: string;
+  wordCount: number;
+  isFinal: boolean;
+  error?: string;
 };
 
 const liveActivity = NativeModules.CounterLiveActivityModule as
@@ -25,21 +38,123 @@ const liveActivity = NativeModules.CounterLiveActivityModule as
 
 function App() {
   const [count, setCount] = useState(0);
+  const [isCountLoaded, setIsCountLoaded] = useState(Platform.OS !== 'ios');
   const [isLiveActivityActive, setIsLiveActivityActive] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const countRef = useRef(count);
+  const voiceBaseCountRef = useRef(count);
 
   useEffect(() => {
-    if (Platform.OS === 'ios') {
+    countRef.current = count;
+  }, [count]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !liveActivity) {
+      setIsCountLoaded(true);
+      return;
+    }
+
+    liveActivity
+      .getSavedCount()
+      .then(savedCount => {
+        countRef.current = savedCount;
+        setCount(savedCount);
+        setIsCountLoaded(true);
+      })
+      .catch(() => setIsCountLoaded(true));
+  }, []);
+
+  const startVoiceInput = useCallback(async () => {
+    if (!liveActivity) {
+      return;
+    }
+
+    voiceBaseCountRef.current = countRef.current;
+    setTranscript('');
+    try {
+      await liveActivity.startVoiceRecognition();
+      setIsListening(true);
+    } catch (error) {
+      setIsListening(false);
+      const message =
+        error instanceof Error ? error.message : 'Unable to start voice input.';
+      Alert.alert('Voice Input', message);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !liveActivity) {
+      return;
+    }
+
+    const emitter = new NativeEventEmitter(
+      NativeModules.CounterLiveActivityModule,
+    );
+    const voiceSubscription = emitter.addListener(
+      'CounterVoiceProgress',
+      (event: Object) => {
+        const progress = event as VoiceProgress;
+        setTranscript(progress.transcript);
+        setCount(voiceBaseCountRef.current + progress.wordCount);
+        setIsListening(!progress.isFinal);
+        if (progress.error) {
+          Alert.alert('Voice Input', progress.error);
+        }
+      },
+    );
+
+    const handleVoiceURL = async (url: string | null | undefined) => {
+      if (!url?.startsWith('fegcontextflow://voice')) {
+        return;
+      }
+
+      const savedCount = await liveActivity.getSavedCount();
+      countRef.current = savedCount;
+      setCount(savedCount);
+      setIsCountLoaded(true);
+
+      const active = await liveActivity.isActive();
+      setIsLiveActivityActive(active);
+      if (active) {
+        await startVoiceInput();
+      } else {
+        Alert.alert(
+          'Live Activity ended',
+          'Start the Live Activity before using its voice shortcut.',
+        );
+      }
+    };
+
+    Linking.getInitialURL().then(handleVoiceURL).catch(() => undefined);
+    const urlSubscription = Linking.addEventListener('url', event => {
+      handleVoiceURL(event.url).catch(() => undefined);
+    });
+
+    liveActivity
+      .isActive()
+      .then(setIsLiveActivityActive)
+      .catch(() => undefined);
+
+    return () => {
+      voiceSubscription.remove();
+      urlSubscription.remove();
+    };
+  }, [startVoiceInput]);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios' && isCountLoaded) {
       liveActivity?.saveCount(count);
     }
 
-    if (!isLiveActivityActive || !liveActivity) {
+    if (!isCountLoaded || !isLiveActivityActive || !liveActivity) {
       return;
     }
 
     liveActivity.update(count).catch(() => {
       setIsLiveActivityActive(false);
     });
-  }, [count, isLiveActivityActive]);
+  }, [count, isCountLoaded, isLiveActivityActive]);
 
   const toggleLiveActivity = async () => {
     if (!liveActivity) {
@@ -52,6 +167,10 @@ function App() {
 
     try {
       if (isLiveActivityActive) {
+        if (isListening) {
+          await liveActivity.stopVoiceRecognition();
+          setIsListening(false);
+        }
         await liveActivity.end();
         setIsLiveActivityActive(false);
       } else {
@@ -64,6 +183,19 @@ function App() {
           ? error.message
           : 'Unable to update Live Activity.';
       Alert.alert('Dynamic Island', message);
+    }
+  };
+
+  const toggleVoiceInput = async () => {
+    if (!liveActivity) {
+      return;
+    }
+
+    if (isListening) {
+      await liveActivity.stopVoiceRecognition();
+      setIsListening(false);
+    } else {
+      await startVoiceInput();
     }
   };
 
@@ -151,6 +283,31 @@ function App() {
                     : 'Start Live Activity'}
                 </Text>
               </Pressable>
+
+              {isLiveActivityActive && (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={toggleVoiceInput}
+                    style={({ pressed }) => [
+                      styles.voiceButton,
+                      isListening && styles.voiceButtonActive,
+                      pressed && styles.pressed,
+                    ]}
+                    testID="voice-input-button"
+                  >
+                    <Text style={styles.voiceButtonText}>
+                      {isListening ? 'Stop Listening' : 'Start Voice Input'}
+                    </Text>
+                  </Pressable>
+                  <Text style={styles.voiceHint}>
+                    {isListening
+                      ? transcript || 'Listening…'
+                      : transcript ||
+                        'Tap the Live Activity or widget to speak.'}
+                  </Text>
+                </>
+              )}
 
               <Pressable
                 accessibilityRole="button"
@@ -301,6 +458,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  voiceButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#7C3AED',
+  },
+  voiceButtonActive: {
+    backgroundColor: '#DC2626',
+  },
+  voiceButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  voiceHint: {
+    maxWidth: 300,
+    color: '#536086',
+    fontSize: 13,
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.65,

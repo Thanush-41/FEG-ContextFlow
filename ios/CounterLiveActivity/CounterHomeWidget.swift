@@ -1,16 +1,16 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
-
-private let counterAppGroup = "group.com.fegcontextflow.counter"
 
 struct CounterEntry: TimelineEntry {
   let date: Date
   let count: Int
+  let isListening: Bool
 }
 
 struct CounterProvider: TimelineProvider {
   func placeholder(in context: Context) -> CounterEntry {
-    CounterEntry(date: Date(), count: 0)
+    CounterEntry(date: Date(), count: 0, isListening: false)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (CounterEntry) -> Void) {
@@ -23,7 +23,9 @@ struct CounterProvider: TimelineProvider {
 
   private func currentEntry() -> CounterEntry {
     let count = UserDefaults(suiteName: counterAppGroup)?.integer(forKey: "count") ?? 0
-    return CounterEntry(date: Date(), count: count)
+    let isListening = UserDefaults(suiteName: counterAppGroup)?
+      .bool(forKey: "isListening") ?? false
+    return CounterEntry(date: Date(), count: count, isListening: isListening)
   }
 }
 
@@ -57,8 +59,25 @@ struct CounterHomeWidgetView: View {
       Text("Current count")
         .font(.caption)
         .foregroundStyle(.secondary)
+
+      if #available(iOSApplicationExtension 18.0, *) {
+        Button(intent: ToggleCounterVoiceIntent()) {
+          Label(
+            entry.isListening ? "Stop" : "Speak",
+            systemImage: entry.isListening ? "stop.fill" : "mic.fill"
+          )
+          .font(.caption2.bold())
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(entry.isListening ? .red : .indigo)
+      } else {
+        Label("Open to speak", systemImage: "mic.fill")
+          .font(.caption2.bold())
+          .foregroundStyle(.indigo)
+      }
     }
     .padding()
+    .widgetURL(URL(string: "fegcontextflow://voice"))
   }
 }
 

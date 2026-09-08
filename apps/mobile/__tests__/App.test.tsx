@@ -108,6 +108,9 @@ jest.mock('@feg/api-client', () => ({
     optInPromotion: jest.fn((promotionId: string) => { promotions = promotions.map(item => item.id === promotionId ? { ...item, optedIn: true } : item); return Promise.resolve(promotions[0]); }),
     getContent: jest.fn((kind: string) => Promise.resolve([{ id: `${kind}-article`, kind, title: `${kind} title`, summary: `${kind} summary`, body: [`${kind} body`], publishedAt: '2026-09-09T00:00:00.000Z' }])),
     getContentArticle: jest.fn(),
+    getCommunityFeed: jest.fn(() => Promise.resolve([{ id: 'community-live-derby', authorName: 'Mara', message: 'A shared demo ticket.', createdAt: '2026-09-09T00:30:00.000Z', reactionCount: 18, reactedByMe: false, sharedSelections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', acceptedOdds: 1.55 }], demoOnly: true }])),
+    toggleCommunityReaction: jest.fn((postId: string) => Promise.resolve({ id: postId, authorName: 'Mara', message: 'A shared demo ticket.', createdAt: '2026-09-09T00:30:00.000Z', reactionCount: 19, reactedByMe: true, sharedSelections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', acceptedOdds: 1.55 }], demoOnly: true })),
+    copyCommunityPostToSlip: jest.fn(() => { slip = withTotals({ ...slip, version: slip.version + 1, selections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', eventLabel: 'Chelsea · Liverpool', marketLabel: 'Match result', selectionLabel: '1', acceptedOdds: 1.55, currentOdds: 1.55, state: 'active' }] }); return Promise.resolve({ slip, unavailableSelectionIds: [] }); }),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -246,6 +249,16 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () => byTestId('article-news-article').props.onPress());
   expect(byTestId('article-screen')).toBeTruthy();
   expect(renderer!.root.findByProps({ children: 'news body' })).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('article-back').props.onPress());
+  await ReactTestRenderer.act(async () => byTestId('discovery-back').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-community-button').props.onPress(); });
+  expect(byTestId('community-post-community-live-derby')).toBeTruthy();
+  await ReactTestRenderer.act(async () => { await byTestId('react-community-live-derby').props.onPress(); });
+  expect(byTestId('react-community-live-derby').props.accessibilityLabel).toBe('Remove reaction · 19');
+  await ReactTestRenderer.act(async () => { await byTestId('copy-community-community-live-derby').props.onPress(); });
+  await ReactTestRenderer.act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 50)); });
+  expect(byTestId('offer-list')).toBeTruthy();
+  expect(byTestId('slip-count').props.children).toEqual(['BET SLIP · ', 1, ' PICK', '']);
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

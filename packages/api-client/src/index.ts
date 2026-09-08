@@ -10,6 +10,7 @@ import {
   type Promotion,
   type ContentArticle,
   type ContentKind,
+  type CommunityPost,
   type PlaceDemoBet,
   type OfferResponse,
   type OfferTimeFilter,
@@ -175,6 +176,18 @@ export class ContextFlowClient {
 
   getContentArticle(articleId: string): Promise<ContentArticle> {
     return this.get(`/api/content/${encodeURIComponent(articleId)}`);
+  }
+
+  getCommunityFeed(): Promise<CommunityPost[]> {
+    return this.get('/api/community/feed');
+  }
+
+  toggleCommunityReaction(postId: string): Promise<CommunityPost> {
+    return this.post(`/api/community/posts/${encodeURIComponent(postId)}/reaction`, {});
+  }
+
+  copyCommunityPostToSlip(postId: string, tab: number, expectedVersion: number): Promise<{ slip: BetSlip; unavailableSelectionIds: string[] }> {
+    return this.post(`/api/community/posts/${encodeURIComponent(postId)}/copy`, { tab, expectedVersion });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

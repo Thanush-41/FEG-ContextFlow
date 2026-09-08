@@ -433,6 +433,24 @@ export const ContentArticleSchema = z.object({
 });
 export type ContentArticle = z.infer<typeof ContentArticleSchema>;
 
+export const CommunitySharedSelectionSchema = z.object({
+  eventId: PublicIdSchema,
+  marketId: PublicIdSchema,
+  selectionId: PublicIdSchema,
+  acceptedOdds: DecimalOddsSchema,
+});
+export const CommunityPostSchema = z.object({
+  id: PublicIdSchema,
+  authorName: z.string().min(1),
+  message: z.string().min(1),
+  createdAt: z.string().datetime(),
+  reactionCount: z.number().int().nonnegative(),
+  reactedByMe: z.boolean(),
+  sharedSelections: z.array(CommunitySharedSelectionSchema).max(10),
+  demoOnly: z.literal(true),
+});
+export type CommunityPost = z.infer<typeof CommunityPostSchema>;
+
 export const CreateDemoSessionSchema = z.object({ deviceName: z.string().min(2).max(80) });
 
 export const VoiceSessionStateSchema = z.enum([

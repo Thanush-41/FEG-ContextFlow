@@ -13,7 +13,7 @@
 
 ## Raw source
 
-Source: `App.tsx`
+Source: `apps/mobile/App.tsx`
 
 ```tsx
 const styles = StyleSheet.create({

@@ -1,0 +1,7 @@
+appId: com.fegcontextflow
+---
+- launchApp
+- assertVisible: "Simple Counter"
+- tapOn:
+    id: "increase-button"
+- assertVisible: "1"

@@ -5,8 +5,10 @@
 > [`docs/sprint-1`](docs/sprint-1/README.md). The baseline is preserved by the
 > Git tag `voice-native-skeleton-v1`.
 
-A small React Native counter app for iOS and Android. The shared UI lives in
-`App.tsx`; the `ios/` and `android/` directories contain the native projects.
+A full-stack TypeScript monorepo whose preserved bare React Native app lives in
+`apps/mobile`. Its shared UI entry is `apps/mobile/App.tsx`; native projects are
+under `apps/mobile/ios` and `apps/mobile/android`. The NestJS API and shared
+packages are additive Sprint 2 foundations.
 
 On iOS 16.2 or later, tap **Start Live Activity** to mirror the counter on the
 Lock Screen and in the Dynamic Island. Increasing, decreasing, or resetting the
@@ -36,10 +38,11 @@ npm install
 For iOS, install CocoaPods dependencies after Xcode is installed:
 
 ```sh
+cd apps/mobile
 bundle install
 cd ios
 bundle exec pod install
-cd ..
+cd ../../..
 ```
 
 ## Run the app
@@ -47,7 +50,7 @@ cd ..
 Start Metro in one terminal:
 
 ```sh
-npm start
+npm run mobile
 ```
 
 Then launch a platform build in another terminal:
@@ -74,27 +77,32 @@ built with the Android toolchain.
 Install Android Studio/JDK, configure an Android SDK, then run:
 
 ```sh
-cd android
+cd apps/mobile/android
 ./gradlew assembleRelease
 ```
 
 The APK is written to:
 
 ```text
-android/app/build/outputs/apk/release/app-release.apk
+apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
 Before distributing a release, configure a private release signing key in the
 Android Gradle configuration. Debug builds can be created with:
 
 ```sh
-cd android
+cd apps/mobile/android
 ./gradlew assembleDebug
 ```
 
 ## Quality checks
 
 ```sh
-npm test -- --runInBand
+npm test
 npm run lint
+npm run typecheck
+npm run build
 ```
+
+See [`docs/sprint-2`](docs/sprint-2/README.md) for the API, MongoDB replica-set,
+workspace, and local-development commands.

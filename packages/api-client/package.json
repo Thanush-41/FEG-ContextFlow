@@ -1,0 +1,14 @@
+{
+  "name": "@feg/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": { "@feg/contracts": "*" },
+  "devDependencies": { "typescript": "6.0.3" }
+}

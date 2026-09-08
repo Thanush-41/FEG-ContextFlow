@@ -8,7 +8,8 @@
 Use a TypeScript monorepo in Sprint 2 with:
 
 - `apps/mobile`: the existing bare React Native application, moved without a
-  framework migration and retaining `ios/` and `android/` native projects.
+  framework migration and retaining `apps/mobile/ios` and `apps/mobile/android`
+  native projects.
 - `apps/api`: NestJS REST API plus Socket.IO gateway.
 - `packages/contracts`: shared DTO schemas, enums, IDs and event contracts.
 - `packages/api-client`: generated/typed mobile transport.

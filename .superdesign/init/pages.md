@@ -2,11 +2,11 @@
 
 ## `/` — Counter prototype
 
-Entry: `App.tsx`
+Entry: `apps/mobile/App.tsx`
 
 Dependencies:
 
-- `App.tsx`
+- `apps/mobile/App.tsx`
   - `react` (external)
   - `react-native` (external)
   - `react-native-safe-area-context` (external)

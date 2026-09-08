@@ -38,6 +38,7 @@ local.properties
 # node.js
 #
 node_modules/
+**/dist/
 npm-debug.log
 yarn-error.log
 
@@ -58,7 +59,7 @@ yarn-error.log
 
 # Ruby / CocoaPods
 **/Pods/
-/vendor/bundle/
+**/vendor/bundle/
 /.bundle/
 
 # Local generated previews and helper artifacts

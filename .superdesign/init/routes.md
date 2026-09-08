@@ -4,10 +4,10 @@
 
 | Path | Entry | Layout | Summary |
 | --- | --- | --- | --- |
-| `/` | `App.tsx` | Inline safe-area wrapper | Counter, iOS Live Activity, voice and notification controls |
+| `/` | `apps/mobile/App.tsx` | Inline safe-area wrapper | Counter, iOS Live Activity, voice and notification controls |
 
 There is no navigation library or router configuration in the current source.
-The native URL handler recognizes `fegcontextflow://voice` in `App.tsx` and
+The native URL handler recognizes `fegcontextflow://voice` in `apps/mobile/App.tsx` and
 starts voice capture when a Live Activity is active.
 
 ## Planned routes

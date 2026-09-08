@@ -1,0 +1,15 @@
+{
+  "name": "@feg/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": { "zod": "4.5.4" },
+  "devDependencies": { "typescript": "6.0.3" }
+}

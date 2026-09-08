@@ -47,6 +47,10 @@ export class WalletService {
     return this.apply(userId, amountMinorUnits, idempotencyKey, 'bet_debit', -1, ticketId, session);
   }
 
+  async creditForTicket(userId: string, amountMinorUnits: number, idempotencyKey: string, ticketId: string, type: 'bet_refund' | 'bet_payout' | 'cashout_credit', session?: ClientSession): Promise<WalletResult> {
+    return this.apply(userId, amountMinorUnits, idempotencyKey, type, 1, ticketId, session);
+  }
+
   private async mutate(userId: string, candidate: unknown, type: 'demo_deposit' | 'demo_withdrawal', direction: 1 | -1): Promise<WalletResult> {
     const parsed = WalletMutationSchema.safeParse(candidate);
     if (!parsed.success) throw new BadRequestException('Invalid wallet mutation.');

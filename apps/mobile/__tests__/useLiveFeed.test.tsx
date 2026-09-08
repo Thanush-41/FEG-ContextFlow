@@ -47,6 +47,8 @@ test('resyncs on reconnect, batches newer prices, and cleans up on unmount', asy
   });
   expect(feed.wallet?.availableMinorUnits).toBe(900);
   expect(feed.ticket?.id).toBe('ticket-demo');
+  await act(async () => { mockHandlers['ticket.updated']({ id: 'ticket-demo', status: 'won' }); });
+  expect(feed.ticket?.status).toBe('won');
   expect(feed.notification).toBe('Ticket confirmed');
   await act(async () => { mockHandlers.disconnect(); });
   expect(feed.status).toBe('stale');

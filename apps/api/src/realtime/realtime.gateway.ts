@@ -56,10 +56,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     this.server?.to(`event:${event.id}`).emit('event.updated', event);
   }
 
-  publishTicket(ticket: DemoTicket) {
+  publishTicket(ticket: DemoTicket, event: 'ticket.created' | 'ticket.updated' = 'ticket.created') {
     const owner = ticket.audit?.actor;
-    if (owner) this.server?.to(`user:${owner}`).emit('ticket.created', ticket);
-    else this.server?.emit('ticket.created', ticket);
+    if (owner) this.server?.to(`user:${owner}`).emit(event, ticket);
+    else this.server?.emit(event, ticket);
   }
 
   publishWallet(wallet: Wallet) { const sequence = this.nextUserSequence(wallet.userId); this.server?.to(`user:${wallet.userId}`).emit('wallet.updated', this.envelope('wallet', wallet, sequence, undefined, sequence)); }

@@ -56,10 +56,12 @@ export function useLiveFeed(baseUrl: string, ownerId: string) {
       const parsed = WalletSchema.safeParse(envelope?.payload);
       if (parsed.success && parsed.data.userId === ownerId) setWallet(parsed.data);
     });
-    socket.on('ticket.created', value => {
+    const receiveTicket = (value: unknown) => {
       const parsed = DemoTicketSchema.safeParse(value);
       if (parsed.success) setTicket(parsed.data);
-    });
+    };
+    socket.on('ticket.created', receiveTicket);
+    socket.on('ticket.updated', receiveTicket);
     socket.on('notification.updated', envelope => {
       if (typeof envelope?.payload?.body === 'string') setNotification(envelope.payload.body);
     });

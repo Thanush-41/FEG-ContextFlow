@@ -264,7 +264,7 @@ export type Wallet = z.infer<typeof WalletSchema>;
 export const LedgerEntrySchema = z.object({
   id: PublicIdSchema,
   userId: PublicIdSchema,
-  type: z.enum(['demo_deposit', 'demo_withdrawal', 'bet_debit', 'bet_refund', 'bonus']),
+  type: z.enum(['demo_deposit', 'demo_withdrawal', 'bet_debit', 'bet_refund', 'bet_payout', 'cashout_credit', 'bonus']),
   amountMinorUnits: z.number().int(),
   currency: z.literal('DCO'),
   balanceAfterMinorUnits: z.number().int().nonnegative(),
@@ -302,7 +302,7 @@ export type PlaceDemoBet = z.infer<typeof PlaceDemoBetSchema>;
 
 export const DemoTicketSchema = z.object({
   id: PublicIdSchema,
-  status: z.enum(['open', 'won', 'lost', 'void']),
+  status: z.enum(['open', 'won', 'lost', 'void', 'cashed_out']),
   placedAt: z.string().datetime(),
   selections: z.array(BetSelectionInputSchema),
   stake: DemoMoneySchema,
@@ -313,8 +313,40 @@ export const DemoTicketSchema = z.object({
   walletAfterMinorUnits: z.number().int().nonnegative().optional(),
   placementSnapshot: z.array(SlipSelectionSchema).optional(),
   audit: z.object({ actor: PublicIdSchema, placedAt: z.string().datetime(), idempotencyKey: z.string().uuid() }).optional(),
+  settledAt: z.string().datetime().optional(),
+  payout: DemoMoneySchema.optional(),
+  resolution: z.enum(['won', 'lost', 'void', 'cashout']).optional(),
+  resolutionAudit: z.object({ actor: PublicIdSchema, resolvedAt: z.string().datetime(), idempotencyKey: z.string().uuid() }).optional(),
 });
 export type DemoTicket = z.infer<typeof DemoTicketSchema>;
+
+export const CashoutQuoteSchema = z.object({
+  id: PublicIdSchema,
+  ticketId: PublicIdSchema,
+  amount: DemoMoneySchema,
+  expiresAt: z.string().datetime(),
+});
+export type CashoutQuote = z.infer<typeof CashoutQuoteSchema>;
+
+export const CashoutTicketSchema = z.object({
+  quoteId: PublicIdSchema,
+  idempotencyKey: z.string().uuid(),
+});
+export type CashoutTicket = z.infer<typeof CashoutTicketSchema>;
+
+export const SettleTicketSchema = z.object({
+  result: z.enum(['won', 'lost', 'void']),
+  idempotencyKey: z.string().uuid(),
+});
+export type SettleTicket = z.infer<typeof SettleTicketSchema>;
+
+export const CopyTicketSchema = z.object({ tab: z.number().int().min(1).max(4), expectedVersion: z.number().int().nonnegative() });
+export const CopyTicketResultSchema = z.object({
+  slip: BetSlipSchema,
+  unavailableSelectionIds: z.array(PublicIdSchema),
+  repricedSelectionIds: z.array(PublicIdSchema),
+});
+export type CopyTicketResult = z.infer<typeof CopyTicketResultSchema>;
 
 export const VoiceSessionStateSchema = z.enum([
   'idle',

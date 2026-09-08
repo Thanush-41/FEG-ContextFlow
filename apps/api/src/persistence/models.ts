@@ -45,6 +45,7 @@ export const demoTicketSchema = new Schema(
     code: { type: String, unique: true, sparse: true, index: true }, calculation: Schema.Types.Mixed,
     walletBeforeMinorUnits: Number, walletAfterMinorUnits: Number,
     placementSnapshot: [Schema.Types.Mixed], audit: Schema.Types.Mixed,
+    settledAt: String, payout: Schema.Types.Mixed, resolution: String, resolutionAudit: Schema.Types.Mixed,
   },
   { versionKey: false },
 );

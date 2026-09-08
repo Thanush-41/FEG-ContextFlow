@@ -19,6 +19,7 @@ import { WalletController } from './wallet/wallet.controller.js';
 import { WalletService } from './wallet/wallet.service.js';
 import { TicketPlacementController } from './tickets/ticket-placement.controller.js';
 import { TicketPlacementService } from './tickets/ticket-placement.service.js';
+import { TicketAdminController } from './tickets/ticket-admin.controller.js';
 import { LiveAdminController } from './live/live-admin.controller.js';
 import { LiveController } from './live/live.controller.js';
 import { LiveAdminGuard } from './live/live-admin.guard.js';
@@ -58,7 +59,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, LiveAdminController, LiveController],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController],
   providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, DemoAuthGuard, LiveAdminGuard],
 })
 export class AppModule {}

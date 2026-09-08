@@ -7,7 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
 import { useLiveFeed } from './useLiveFeed';
-import type { BetBuilderValidation, BetSlip, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, CashoutQuote, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -89,6 +89,7 @@ function App() {
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
   const liveFeed = useLiveFeed(apiBaseUrl(), slipOwnerId);
   const [ticket, setTicket] = useState<DemoTicket | null>(null);
+  const [tickets, setTickets] = useState<DemoTicket[]>([]);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -101,7 +102,11 @@ function App() {
   const voiceBaseCountRef = useRef(count);
 
   useEffect(() => { if (liveFeed.wallet) setWallet(liveFeed.wallet); }, [liveFeed.wallet]);
-  useEffect(() => { if (liveFeed.ticket) setTicket(liveFeed.ticket); }, [liveFeed.ticket]);
+  useEffect(() => {
+    if (!liveFeed.ticket) return;
+    setTickets(current => [liveFeed.ticket!, ...current.filter(item => item.id !== liveFeed.ticket!.id)]);
+    setTicket(current => current?.id === liveFeed.ticket?.id ? liveFeed.ticket : current);
+  }, [liveFeed.ticket]);
 
   useEffect(() => {
     const updates = Object.values(liveFeed.snapshots);
@@ -142,10 +147,16 @@ function App() {
     setWallet(nextWallet); setLedger(nextLedger);
   }, []);
 
+  const refreshTickets = useCallback(async () => {
+    const next = await api.getPlacedTickets(slipOwnerId);
+    setTickets(next);
+    return next;
+  }, []);
+
   useEffect(() => {
     refreshWallet().catch(() => undefined);
-    api.getPlacedTickets(slipOwnerId).then(tickets => setTicket(tickets[0] ?? null)).catch(() => undefined);
-  }, [refreshWallet]);
+    refreshTickets().catch(() => undefined);
+  }, [refreshTickets, refreshWallet]);
 
   useEffect(() => {
     if (!slip) return;
@@ -309,12 +320,35 @@ function App() {
         idempotencyKey: `f37970b1-1127-45b1-ab01-${String(slip.version).padStart(12, '0')}`,
       });
       setTicket(placed);
+      setTickets(current => [placed, ...current.filter(item => item.id !== placed.id)]);
       setSlip(await api.getSlip(slipOwnerId, slipTab));
       await refreshWallet();
     } catch (error) {
       Alert.alert('Demo bet', error instanceof Error ? error.message : 'Unable to place demo bet.');
     } finally {
       setIsPlacingBet(false);
+    }
+  };
+
+  const cashoutTicket = async (selected: DemoTicket, quote: CashoutQuote) => {
+    try {
+      const resolved = await api.cashoutTicket(slipOwnerId, selected.id, quote.id, `ca5a0b11-1127-45b1-ab01-${String(Date.now()).slice(-12)}`);
+      setTicket(resolved);
+      setTickets(current => [resolved, ...current.filter(item => item.id !== resolved.id)]);
+      await refreshWallet();
+    } catch (error) {
+      Alert.alert('Demo cash out', error instanceof Error ? error.message : 'Unable to cash out this ticket.');
+    }
+  };
+
+  const copyTicket = async (selected: DemoTicket) => {
+    if (!slip) return;
+    try {
+      const result = await api.copyTicketToSlip(slipOwnerId, selected.id, slipTab, slip.version);
+      setSlip(result.slip); setTicket(null); setActiveTab('Sport'); setSlipView('expanded');
+      if (result.unavailableSelectionIds.length) Alert.alert('Ticket copied', `${result.unavailableSelectionIds.length} unavailable selection(s) were skipped.`);
+    } catch (error) {
+      Alert.alert('Copy ticket', error instanceof Error ? error.message : 'Unable to copy this ticket.');
     }
   };
 
@@ -341,7 +375,7 @@ function App() {
           {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Live' && !detailEvent && <View><Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.status === 'current' ? 'Live feed connected · Demo simulation' : 'Live feed reconnecting · Prices may be stale'}</Text>{liveFeed.notification && <Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.notification}</Text>}<LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={liveFeed.status === 'current' ? toggleOfferOdd : () => Alert.alert('Live feed unavailable', 'Wait for the current prices to reconnect.')} onOpen={setDetailEvent} />{Object.values(liveFeed.snapshots).filter(snapshot => snapshot.event.status === 'live').map(snapshot => <View key={snapshot.eventId} style={styles.infoCard}><Text style={styles.infoTitle}>{snapshot.event.sport} · {snapshot.period} · {snapshot.running ? 'Simulation running' : 'Simulation paused'}</Text>{snapshot.incidents.slice(-5).map(incident => <Text key={incident.id} style={styles.infoBody}>{Math.floor(incident.clockSeconds / 60)}′ {incident.label}</Text>)}</View>)}</View>}
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
-          {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} />}
+          {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
           {activeTab === 'Casino' && <CasinoScreen />}
           {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : <MenuScreen onWallet={() => setWalletOpen(true)} />)}
         </ScrollView>}
@@ -575,13 +609,23 @@ function SlipSheet({ slip, busy, view, onView, activeTab, onTab, onMode, onStake
   </View>;
 }
 
-function TicketsScreen({ slip, wallet, ticket, isPlacing, onStake, onPlace }: { slip: BetSlip | null; wallet: Wallet | null; ticket: DemoTicket | null; isPlacing: boolean; onStake: (minorUnits: number) => void; onPlace: () => void }) {
+function TicketsScreen({ slip, wallet, ticket, tickets, isPlacing, onStake, onPlace, onSelect, onBack, onLookup, onQuote, onCashout, onCopy }: {
+  slip: BetSlip | null; wallet: Wallet | null; ticket: DemoTicket | null; tickets: DemoTicket[]; isPlacing: boolean;
+  onStake: (minorUnits: number) => void; onPlace: () => void; onSelect: (ticket: DemoTicket) => void; onBack: () => void;
+  onLookup: (code: string) => Promise<DemoTicket>; onQuote: (ticket: DemoTicket) => Promise<CashoutQuote>; onCashout: (ticket: DemoTicket, quote: CashoutQuote) => Promise<void>;
+  onCopy: (ticket: DemoTicket) => Promise<void>;
+}) {
+  const [filter, setFilter] = useState<'all' | 'open' | 'settled' | 'cashed_out'>('all');
+  const [lookup, setLookup] = useState('');
+  const [quote, setQuote] = useState<CashoutQuote | null>(null);
+  const [lookupError, setLookupError] = useState(false);
+  useEffect(() => { setQuote(null); }, [ticket?.id, ticket?.status]);
   const insufficient = Boolean(slip && wallet && slip.stake.minorUnits > wallet.availableMinorUnits);
   const canPlace = Boolean(slip?.selections.length && slip.totals && !slip.warnings.length && !insufficient);
   if (ticket && !slip?.selections.length) return <View testID="tickets-screen">
-    <View style={styles.screenHeading}><Text style={styles.screenTitle}>BET RECEIPT</Text><Text style={styles.ticketStatus}>OPEN</Text></View>
+    <View style={styles.screenHeading}><Pressable testID="ticket-detail-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>BET RECEIPT</Text><Text style={styles.ticketStatus}>{ticket.status.replace('_', ' ').toUpperCase()}</Text></View>
     <View style={styles.receiptCard} testID="ticket-receipt">
-      <Text style={styles.receiptCheck}>✓</Text><Text style={styles.ticketTitle}>Demo ticket confirmed</Text>
+      <Text style={styles.receiptCheck}>{ticket.status === 'open' ? '✓' : ticket.status === 'won' ? '★' : '●'}</Text><Text style={styles.ticketTitle}>{ticket.status === 'open' ? 'Demo ticket confirmed' : `Demo ticket ${ticket.status.replace('_', ' ')}`}</Text>
       <Text selectable style={styles.receiptCode} testID="ticket-code">{ticket.code ?? ticket.id}</Text>
       <View style={styles.receiptDivider} />
       <ReceiptRow label="SELECTIONS" value={String(ticket.selections.length)} />
@@ -589,10 +633,25 @@ function TicketsScreen({ slip, wallet, ticket, isPlacing, onStake, onPlace }: { 
       <ReceiptRow label="STAKE" value={`${(ticket.stake.minorUnits / 100).toFixed(2)} DCO`} />
       <ReceiptRow label="BONUS" value={`${((ticket.calculation?.bonusMinorUnits ?? 0) / 100).toFixed(2)} DCO`} />
       <ReceiptRow label="POTENTIAL RETURN" value={`${(ticket.potentialReturn.minorUnits / 100).toFixed(2)} DCO`} highlight />
-      <ReceiptRow label="BALANCE AFTER" value={`${((ticket.walletAfterMinorUnits ?? wallet?.availableMinorUnits ?? 0) / 100).toFixed(2)} DCO`} />
+      {ticket.payout && <ReceiptRow label="PAYOUT" value={`${(ticket.payout.minorUnits / 100).toFixed(2)} DCO`} highlight />}
+      <ReceiptRow label={ticket.status === 'open' ? 'BALANCE AFTER' : 'CURRENT BALANCE'} value={`${(((ticket.status === 'open' ? ticket.walletAfterMinorUnits : wallet?.availableMinorUnits) ?? 0) / 100).toFixed(2)} DCO`} />
+      {ticket.status === 'open' && !quote && <Pressable testID="request-cashout-button" onPress={async () => { try { setQuote(await onQuote(ticket)); } catch (error) { Alert.alert('Demo cash out', error instanceof Error ? error.message : 'Quote unavailable.'); } }} style={styles.placeButton}><Text style={styles.placeButtonText}>GET CASH-OUT OFFER</Text></Pressable>}
+      {ticket.status === 'open' && quote && <View style={styles.slipWarning}><Text style={styles.slipWarningCode}>CASH-OUT OFFER</Text><Text style={styles.slipWarningText}>{(quote.amount.minorUnits / 100).toFixed(2)} DCO · expires in 30 seconds</Text><Pressable testID="confirm-cashout-button" onPress={() => onCashout(ticket, quote)}><Text style={styles.slipWarningAction}>CONFIRM DEMO CASH OUT</Text></Pressable></View>}
       <View style={styles.receiptActions}><Pressable testID="copy-ticket-button" onPress={() => Alert.alert('Ticket code', `${ticket.code ?? ticket.id}\nSelect and copy the code above.`)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>COPY CODE</Text></Pressable><Pressable testID="share-ticket-button" onPress={() => Share.share({ message: `FEG demo ticket ${ticket.code ?? ticket.id}` })} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>SHARE</Text></Pressable></View>
+      <Pressable testID="copy-ticket-to-slip-button" onPress={() => onCopy(ticket)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>COPY SELECTIONS TO SLIP</Text></Pressable>
     </View>
   </View>;
+  if (!slip?.selections.length) {
+    const visible = tickets.filter(item => filter === 'all' || item.status === filter || filter === 'settled' && ['won', 'lost', 'void'].includes(item.status));
+    return <View testID="tickets-screen">
+      <View style={styles.screenHeading}><Text style={styles.screenTitle}>MY BETS</Text><Text style={styles.ticketStatus}>DEMO</Text></View>
+      <View style={styles.lookupRow}><TextInput testID="ticket-lookup-input" value={lookup} onChangeText={value => { setLookup(value); setLookupError(false); }} autoCapitalize="characters" placeholder="Enter ticket code" placeholderTextColor="#6F7B89" style={styles.marketSearch} /><Pressable testID="ticket-lookup-button" onPress={async () => { try { onSelect(await onLookup(lookup.trim())); } catch { setLookupError(true); } }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>FIND</Text></Pressable></View>
+      {lookupError && <Text style={styles.inlineError}>TICKET CODE NOT FOUND</Text>}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>{(['all', 'open', 'settled', 'cashed_out'] as const).map(item => <Pressable key={item} testID={`ticket-filter-${item}`} onPress={() => setFilter(item)} style={[styles.filterButton, filter === item && styles.oddButtonSelected]}><Text style={[styles.filterButtonText, filter === item && styles.oddTextSelected]}>{item.replace('_', ' ').toUpperCase()}</Text></Pressable>)}</ScrollView>
+      {visible.map(item => <Pressable key={item.id} testID={`ticket-row-${item.id}`} onPress={() => onSelect(item)} style={styles.ticketCard}><View style={styles.screenHeading}><Text style={styles.ticketTitle}>{item.code ?? item.id}</Text><Text style={styles.ticketStatus}>{item.status.replace('_', ' ').toUpperCase()}</Text></View><ReceiptRow label="STAKE" value={`${(item.stake.minorUnits / 100).toFixed(2)} DCO`} /><ReceiptRow label={item.payout ? 'PAYOUT' : 'POTENTIAL'} value={`${((item.payout ?? item.potentialReturn).minorUnits / 100).toFixed(2)} DCO`} highlight /></Pressable>)}
+      {!visible.length && <EmptyState icon="▤" title="No matching tickets" body="Place a demo ticket or choose a different status filter." />}
+    </View>;
+  }
   return <View testID="tickets-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>REVIEW TICKET</Text><Text style={styles.ticketStatus}>DEMO</Text></View>
     {slip?.selections.length ? <View style={styles.ticketCard}>
@@ -843,6 +902,7 @@ const styles = StyleSheet.create({
   infoCard: { margin: 10, padding: 14, borderLeftWidth: 3, borderLeftColor: '#1264C5', backgroundColor: '#151D28' },
   infoTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   infoBody: { color: '#929DAB', fontSize: 10, lineHeight: 15, marginTop: 5 },
+  lookupRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 10 },
   ticketCard: { margin: 10, padding: 14, backgroundColor: '#151D28', borderWidth: 1, borderColor: '#303A47' },
   ticketStatus: { color: '#70AFFF', fontSize: 8, fontWeight: '900' },
   ticketTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginTop: 9 },

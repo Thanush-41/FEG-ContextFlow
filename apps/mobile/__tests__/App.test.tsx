@@ -17,7 +17,10 @@ jest.mock('@shopify/flash-list', () => {
 });
 
 jest.mock('@feg/api-client', () => ({
-  ContextFlowClient: jest.fn().mockImplementation(() => ({
+  ContextFlowClient: jest.fn().mockImplementation(() => {
+    let slip = { id: 'slip-guest-device-0001-1', ownerId: 'guest-device-0001', tab: 1, version: 0, mode: 'accumulator', stake: { currency: 'DCO', minorUnits: 100 }, selections: [] as any[], totals: null as any, warnings: [] as any[], updatedAt: '2026-09-08T12:00:00.000Z' };
+    const withTotals = (next: typeof slip) => ({ ...next, totals: next.selections.length ? { lines: 1, totalOdds: next.selections.reduce((total, item) => total * item.currentOdds, 1), stakeMinorUnits: next.stake.minorUnits, grossReturnMinorUnits: 648, bonusMinorUnits: 0, feeMinorUnits: 0, taxMinorUnits: 0, potentialReturnMinorUnits: 648 } : null });
+    return ({
     getEvents: jest.fn(() => Promise.resolve([])),
     getOffer: jest.fn((timeFilter: string) => Promise.resolve({
       timeFilter,
@@ -67,8 +70,18 @@ jest.mock('@feg/api-client', () => ({
       cache: { maxAgeSeconds: 60, generatedAt: '2026-09-08T12:00:00.000Z' },
     })),
     validateBetBuilder: jest.fn((_eventId: string, selectionIds: string[]) => Promise.resolve({ valid: true, combinedOdds: selectionIds.length === 2 ? 3.24 : 2, reasons: [] })),
+    getSlip: jest.fn((_ownerId: string, tab: number) => Promise.resolve(tab === 1 ? slip : { ...slip, id: `slip-guest-device-0001-${tab}`, tab, version: 0, selections: [], totals: null })),
+    addSlipSelection: jest.fn((_ownerId: string, _tab: number, input: any) => {
+      const changed = input.selectionId === 'selection-home-01';
+      const selection = { ...input, eventLabel: 'Chelsea · Liverpool', marketLabel: input.marketId, selectionLabel: input.selectionId, currentOdds: changed ? input.acceptedOdds + 0.1 : input.acceptedOdds, state: changed ? 'changed' : 'active' };
+      slip = withTotals({ ...slip, version: slip.version + 1, selections: [...slip.selections.filter(item => item.marketId !== input.marketId), selection], warnings: changed ? [{ code: 'ODDS_CHANGED', message: 'Review the new price.', selectionIds: [input.selectionId], recoverable: true }] : slip.warnings });
+      return Promise.resolve(slip);
+    }),
+    removeSlipSelection: jest.fn((_ownerId: string, _tab: number, selectionId: string) => { slip = withTotals({ ...slip, version: slip.version + 1, selections: slip.selections.filter(item => item.selectionId !== selectionId) }); return Promise.resolve(slip); }),
+    updateSlip: jest.fn((_ownerId: string, _tab: number, input: any) => { slip = withTotals({ ...slip, version: slip.version + 1, mode: input.mode ?? slip.mode, stake: input.stakeMinorUnits === undefined ? slip.stake : { currency: 'DCO', minorUnits: input.stakeMinorUnits }, warnings: input.acceptOddsChanges ? [] : slip.warnings }); return Promise.resolve(slip); }),
+    clearSlip: jest.fn(() => { slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(slip); }),
     placeDemoBet: jest.fn(() => Promise.resolve({ id: 'ticket-test-0001' })),
-  })),
+  }); }),
 }));
 
 test('renders the sportsbook shell and preserves the voice word counter', async () => {
@@ -77,6 +90,7 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(<App />);
   });
+  await ReactTestRenderer.act(async () => { await new Promise<void>(resolve => setTimeout(() => resolve(), 0)); });
 
   const byTestId = (testID: string): ReactTestInstance =>
     renderer.root.findByProps({ testID });
@@ -84,6 +98,7 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   expect(byTestId('counter-value').props.children).toBe(0);
   expect(byTestId('event-chelsea-liverpool')).toBeTruthy();
   expect(byTestId('offer-list')).toBeTruthy();
+  expect(byTestId('slip-sheet')).toBeTruthy();
   expect(byTestId('odd-chelsea-liverpool-2').props.accessibilityState.disabled).toBe(true);
 
   await ReactTestRenderer.act(async () => byTestId('favorite-chelsea-liverpool').props.onPress());
@@ -111,8 +126,14 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () => byTestId('detail-lineups').props.onPress());
   expect(renderer!.root.findByProps({ children: 'Chelsea Player 1' })).toBeTruthy();
   await ReactTestRenderer.act(async () => byTestId('detail-markets').props.onPress());
-  await ReactTestRenderer.act(async () => byTestId('add-builder-button').props.onPress());
+  await ReactTestRenderer.act(async () => { byTestId('add-builder-button').props.onPress(); await new Promise<void>(resolve => setTimeout(() => resolve(), 30)); });
   expect(byTestId('open-betslip-button')).toBeTruthy();
+  expect(byTestId('slip-count').props.children).toEqual(['BET SLIP · ', 2, ' PICK', 'S']);
+  expect(byTestId('slip-mode-system')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('slip-mode-system').props.onPress());
+  expect(byTestId('stake-input')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('slip-full-button').props.onPress());
+  expect(byTestId('slip-sheet').props.style).toBeTruthy();
 
   await ReactTestRenderer.act(async () =>
     byTestId('voice-panel-button').props.onPress(),
@@ -140,10 +161,10 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
     byTestId('odd-chelsea-liverpool-0').props.onPress(),
   );
   expect(byTestId('open-betslip-button')).toBeTruthy();
+  expect(byTestId('accept-odds-button')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('accept-odds-button').props.onPress());
 
-  await ReactTestRenderer.act(async () =>
-    byTestId('open-betslip-button').props.onPress(),
-  );
+  await ReactTestRenderer.act(async () => byTestId('reconcile-slip-button').props.onPress());
   await ReactTestRenderer.act(async () =>
     byTestId('place-demo-bet-button').props.onPress(),
   );

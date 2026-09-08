@@ -6,6 +6,8 @@ import {
   type OfferTimeFilter,
   type EventDetailResponse,
   type BetBuilderValidation,
+  type BetSlip,
+  type SlipMode,
   type SportsEvent,
 } from '@feg/contracts';
 
@@ -44,6 +46,26 @@ export class ContextFlowClient {
 
   validateBetBuilder(eventId: string, selectionIds: string[]): Promise<BetBuilderValidation> {
     return this.post(`/api/events/${encodeURIComponent(eventId)}/betbuilder/validate`, { selectionIds });
+  }
+
+  getSlip(ownerId: string, tab: number): Promise<BetSlip> {
+    return this.get(`/api/slips/${encodeURIComponent(ownerId)}/tabs/${tab}`);
+  }
+
+  addSlipSelection(ownerId: string, tab: number, input: { eventId: string; marketId: string; selectionId: string; acceptedOdds: number; expectedVersion: number }): Promise<BetSlip> {
+    return this.post(`/api/slips/${encodeURIComponent(ownerId)}/tabs/${tab}/selections`, input);
+  }
+
+  removeSlipSelection(ownerId: string, tab: number, selectionId: string, expectedVersion: number): Promise<BetSlip> {
+    return this.request(`/api/slips/${encodeURIComponent(ownerId)}/tabs/${tab}/selections/${encodeURIComponent(selectionId)}`, { method: 'DELETE', body: JSON.stringify({ expectedVersion }) });
+  }
+
+  updateSlip(ownerId: string, tab: number, input: { expectedVersion: number; mode?: SlipMode; systemSize?: number; stakeMinorUnits?: number; acceptOddsChanges?: boolean }): Promise<BetSlip> {
+    return this.request(`/api/slips/${encodeURIComponent(ownerId)}/tabs/${tab}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  clearSlip(ownerId: string, tab: number, expectedVersion: number): Promise<BetSlip> {
+    return this.request(`/api/slips/${encodeURIComponent(ownerId)}/tabs/${tab}`, { method: 'DELETE', body: JSON.stringify({ expectedVersion }) });
   }
 
   placeDemoBet(input: PlaceDemoBet): Promise<DemoTicket> {

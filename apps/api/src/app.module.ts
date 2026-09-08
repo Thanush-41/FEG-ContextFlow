@@ -12,10 +12,14 @@ import { OfferService } from './offer/offer.service.js';
 import { PskOfferProvider } from './offer/psk-offer.provider.js';
 import { EventDetailController } from './event-detail/event-detail.controller.js';
 import { EventDetailService } from './event-detail/event-detail.service.js';
+import { SlipsController } from './slips/slips.controller.js';
+import { SlipsService } from './slips/slips.service.js';
 import {
+  BET_SLIP_MODEL,
   DEMO_TICKET_MODEL,
   EVENT_DETAIL_MODEL,
   SPORTS_EVENT_MODEL,
+  betSlipSchema,
   demoTicketSchema,
   eventDetailSchema,
   sportsEventSchema,
@@ -29,6 +33,7 @@ const persistenceImports = mongoUri
         { name: SPORTS_EVENT_MODEL, schema: sportsEventSchema },
         { name: DEMO_TICKET_MODEL, schema: demoTicketSchema },
         { name: EVENT_DETAIL_MODEL, schema: eventDetailSchema },
+        { name: BET_SLIP_MODEL, schema: betSlipSchema },
       ]),
     ]
   : [];
@@ -38,7 +43,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController],
-  providers: [RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController],
+  providers: [RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService],
 })
 export class AppModule {}

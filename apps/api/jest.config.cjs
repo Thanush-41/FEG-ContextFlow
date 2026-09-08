@@ -7,6 +7,7 @@ module.exports = {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json', useESM: true }],
   },
   moduleNameMapper: {
+    '^@feg/bet-engine$': '<rootDir>/../../packages/bet-engine/src/index.ts',
     '^@feg/contracts$': '<rootDir>/../../packages/contracts/src/index.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },

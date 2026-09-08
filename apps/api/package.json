@@ -12,6 +12,7 @@
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand --no-cache"
   },
   "dependencies": {
+    "@feg/bet-engine": "*",
     "@feg/contracts": "*",
     "@nestjs/common": "12.0.1",
     "@nestjs/config": "12.0.0",

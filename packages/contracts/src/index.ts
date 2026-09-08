@@ -137,6 +137,76 @@ export const BetBuilderValidationSchema = z.object({
 });
 export type BetBuilderValidation = z.infer<typeof BetBuilderValidationSchema>;
 
+export const SlipModeSchema = z.enum(['single', 'accumulator', 'system']);
+export type SlipMode = z.infer<typeof SlipModeSchema>;
+
+export const SlipSelectionSchema = z.object({
+  eventId: PublicIdSchema,
+  marketId: PublicIdSchema,
+  selectionId: PublicIdSchema,
+  eventLabel: z.string().min(1),
+  marketLabel: z.string().min(1),
+  selectionLabel: z.string().min(1),
+  acceptedOdds: DecimalOddsSchema,
+  currentOdds: DecimalOddsSchema,
+  state: z.enum(['active', 'changed', 'suspended', 'void']),
+  compatibilityGroup: z.string().optional(),
+});
+export type SlipSelection = z.infer<typeof SlipSelectionSchema>;
+
+export const SlipWarningSchema = z.object({
+  code: z.enum(['ODDS_CHANGED', 'SELECTION_SUSPENDED', 'INCOMPATIBLE_SELECTION', 'STAKE_LIMIT', 'VERSION_CONFLICT']),
+  message: z.string(),
+  selectionIds: z.array(PublicIdSchema).default([]),
+  recoverable: z.boolean().default(true),
+});
+export type SlipWarning = z.infer<typeof SlipWarningSchema>;
+
+export const SlipTotalsSchema = z.object({
+  lines: z.number().int().positive(),
+  totalOdds: z.number().nonnegative(),
+  stakeMinorUnits: z.number().int().nonnegative(),
+  grossReturnMinorUnits: z.number().int().nonnegative(),
+  bonusMinorUnits: z.number().int().nonnegative(),
+  feeMinorUnits: z.number().int().nonnegative(),
+  taxMinorUnits: z.number().int().nonnegative(),
+  potentialReturnMinorUnits: z.number().int().nonnegative(),
+});
+export type SlipTotals = z.infer<typeof SlipTotalsSchema>;
+
+export const BetSlipSchema = z.object({
+  id: PublicIdSchema,
+  ownerId: PublicIdSchema,
+  tab: z.number().int().min(1).max(4),
+  version: z.number().int().nonnegative(),
+  mode: SlipModeSchema,
+  systemSize: z.number().int().positive().optional(),
+  stake: DemoMoneySchema,
+  selections: z.array(SlipSelectionSchema).max(20),
+  totals: SlipTotalsSchema.nullable(),
+  warnings: z.array(SlipWarningSchema),
+  updatedAt: z.string().datetime(),
+});
+export type BetSlip = z.infer<typeof BetSlipSchema>;
+
+export const AddSlipSelectionSchema = z.object({
+  eventId: PublicIdSchema,
+  marketId: PublicIdSchema,
+  selectionId: PublicIdSchema,
+  acceptedOdds: DecimalOddsSchema,
+  expectedVersion: z.number().int().nonnegative(),
+});
+export type AddSlipSelection = z.infer<typeof AddSlipSelectionSchema>;
+
+export const UpdateSlipSchema = z.object({
+  expectedVersion: z.number().int().nonnegative(),
+  mode: SlipModeSchema.optional(),
+  systemSize: z.number().int().positive().optional(),
+  stakeMinorUnits: z.number().int().min(0).max(1_000_000).optional(),
+  acceptOddsChanges: z.boolean().optional(),
+});
+export type UpdateSlip = z.infer<typeof UpdateSlipSchema>;
+
 export const BetSelectionInputSchema = z.object({
   eventId: PublicIdSchema,
   marketId: PublicIdSchema,

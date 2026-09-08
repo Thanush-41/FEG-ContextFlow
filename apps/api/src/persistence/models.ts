@@ -3,6 +3,7 @@ import { Schema } from 'mongoose';
 export const SPORTS_EVENT_MODEL = 'SportsEvent';
 export const DEMO_TICKET_MODEL = 'DemoTicket';
 export const EVENT_DETAIL_MODEL = 'EventDetail';
+export const BET_SLIP_MODEL = 'BetSlip';
 
 const selectionSchema = new Schema(
   { id: { type: String, required: true }, label: { type: String, required: true }, odds: { type: Number, required: true }, previousOdds: Number, state: String, features: [String] },
@@ -65,4 +66,18 @@ export const eventDetailSchema = new Schema({
   statistics: [eventStatisticSchema], form: Schema.Types.Mixed,
   headToHead: [headToHeadSchema], lineups: lineupSchema,
   relatedEvents: [Schema.Types.Mixed], cache: Schema.Types.Mixed,
+}, { versionKey: false });
+
+const slipSelectionSchema = new Schema({
+  eventId: String, marketId: String, selectionId: String, eventLabel: String,
+  marketLabel: String, selectionLabel: String, acceptedOdds: Number,
+  currentOdds: Number, state: String, compatibilityGroup: String,
+}, { _id: false });
+const slipWarningSchema = new Schema({ code: String, message: String, selectionIds: [String], recoverable: Boolean }, { _id: false });
+export const betSlipSchema = new Schema({
+  key: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true, index: true }, ownerId: { type: String, required: true, index: true },
+  tab: Number, version: Number, mode: String, systemSize: Number,
+  stake: Schema.Types.Mixed, selections: [slipSelectionSchema], totals: Schema.Types.Mixed,
+  warnings: [slipWarningSchema], updatedAt: String,
 }, { versionKey: false });

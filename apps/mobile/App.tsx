@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Linking, NativeEventEmitter, NativeModules, Platform, Pressable,
+  Alert, Linking, NativeEventEmitter, NativeModules, PanResponder, Platform, Pressable,
   ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
-import type { BetBuilderValidation, DetailedMarket, EventDetailResponse, OfferLeague, OfferResponse, OfferTimeFilter, SportsEvent } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, DetailedMarket, EventDetailResponse, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -46,6 +46,7 @@ function apiBaseUrl() {
 }
 
 const api = new ContextFlowClient(apiBaseUrl(), async () => undefined);
+const slipOwnerId = 'guest-device-0001';
 
 function toUiEvent(event: SportsEvent): Event {
   const market = event.markets[0];
@@ -77,7 +78,7 @@ function App() {
   const [transcript, setTranscript] = useState('');
   const [showVoice, setShowVoice] = useState(false);
   const [activePeriod, setActivePeriod] = useState('TODAY');
-  const [selectedOdd, setSelectedOdd] = useState<string | null>(null);
+  const [selectedOddKeys, setSelectedOddKeys] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<Tab>('Sport');
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [offerEvents, setOfferEvents] = useState(fallbackEvents);
@@ -87,11 +88,25 @@ function App() {
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  const [builderDraft, setBuilderDraft] = useState<{ picks: BuilderPick[]; combinedOdds: number } | null>(null);
+  const [slip, setSlip] = useState<BetSlip | null>(null);
+  const [slipTab, setSlipTab] = useState(1);
+  const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
+  const [slipBusy, setSlipBusy] = useState(false);
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
 
   useEffect(() => { countRef.current = count; }, [count]);
+
+  useEffect(() => { api.getSlip(slipOwnerId, slipTab).then(setSlip).catch(() => undefined); }, [slipTab]);
+
+  useEffect(() => {
+    if (!slip) return;
+    const keys = new Set<string>();
+    for (const event of [...offerEvents, ...liveEvents]) {
+      event.apiSelectionIds?.forEach((selectionId, index) => { if (slip.selections.some(selection => selection.selectionId === selectionId)) keys.add(`${event.id}-${index}`); });
+    }
+    setSelectedOddKeys(keys);
+  }, [liveEvents, offerEvents, slip]);
 
   const periodFilter = useMemo<OfferTimeFilter>(() => ({
     LIVE: 'live', TODAY: 'today', '1H': '1h', '3H': '3h', TOMORROW: 'tomorrow', ALL: 'all',
@@ -203,28 +218,46 @@ function App() {
     catch (error) { Alert.alert('Notification', error instanceof Error ? error.message : 'Unable to send notification.'); }
   };
 
-  const placeDemoBet = async () => {
-    if (!selectedOdd && !builderDraft) return;
-    let selections: BuilderPick[] = [];
-    if (builderDraft) selections = builderDraft.picks;
-    else if (selectedOdd) {
-    const separator = selectedOdd.lastIndexOf('-');
-    const eventId = selectedOdd.slice(0, separator);
-    const selectionIndex = Number(selectedOdd.slice(separator + 1));
+  const toggleOfferOdd = async (key: string) => {
+    if (!slip || slipBusy) return;
+    const separator = key.lastIndexOf('-');
+    const eventId = key.slice(0, separator);
+    const selectionIndex = Number(key.slice(separator + 1));
     const event = [...offerEvents, ...liveEvents].find(item => item.id === eventId);
     const selectionId = event?.apiSelectionIds?.[selectionIndex];
     const acceptedOdds = Number(event?.markets[selectionIndex]?.value);
-    if (!event?.apiEventId || !event.apiMarketId || !selectionId || !acceptedOdds) {
-      Alert.alert('Demo bet', 'Wait for the live offer to finish loading, then select again.');
-      return;
-    }
-      selections = [{ eventId: event.apiEventId, marketId: event.apiMarketId, selectionId, acceptedOdds }];
-    }
+    if (!event?.apiEventId || !event.apiMarketId || !selectionId || !acceptedOdds) return;
+    const removing = selectedOddKeys.has(key);
+    setSelectedOddKeys(value => { const next = new Set(value); removing ? next.delete(key) : next.add(key); return next; });
+    setSlipBusy(true);
+    try {
+      const next = removing
+        ? await api.removeSlipSelection(slipOwnerId, slipTab, selectionId, slip.version)
+        : await api.addSlipSelection(slipOwnerId, slipTab, { eventId: event.apiEventId, marketId: event.apiMarketId, selectionId, acceptedOdds, expectedVersion: slip.version });
+      setSlip(next);
+    } catch { setSlip(await api.getSlip(slipOwnerId, slipTab)); }
+    finally { setSlipBusy(false); }
+  };
+
+  const addBuilderToSlip = async (picks: BuilderPick[], _combinedOdds: number) => {
+    if (!slip) return;
+    setSlipBusy(true);
+    try {
+      let next = slip;
+      for (const pick of picks) next = await api.addSlipSelection(slipOwnerId, slipTab, { ...pick, expectedVersion: next.version });
+      setSlip(next); setDetailEvent(null); setSlipView('expanded');
+    } catch { setSlip(await api.getSlip(slipOwnerId, slipTab)); }
+    finally { setSlipBusy(false); }
+  };
+
+  const placeDemoBet = async () => {
+    if (!slip?.selections.length || slip.warnings.length) return;
+    const selections = slip.selections.map(selection => ({ eventId: selection.eventId, marketId: selection.marketId, selectionId: selection.selectionId, acceptedOdds: selection.currentOdds }));
     setIsPlacingBet(true);
     try {
       const ticket = await api.placeDemoBet({
-        idempotencyKey: 'f37970b1-1127-45b1-ab01-301f09772f0b',
-        stake: { currency: 'DCO', minorUnits: 100 },
+        idempotencyKey: `f37970b1-1127-45b1-ab01-${String(slip.version).padStart(12, '0')}`,
+        stake: slip.stake,
         selections,
       });
       setTicketId(ticket.id);
@@ -244,7 +277,7 @@ function App() {
         {(activeTab === 'Sport' || activeTab === 'Live') && <PeriodTabs active={activePeriod} onChange={setActivePeriod} />}
         {activeTab === 'Sport' && !detailEvent ? <OfferHome
           offer={offer} events={offerEvents} loading={isOfferLoading} failed={offerError}
-          selectedOdd={selectedOdd} onSelect={setSelectedOdd} onOpen={setDetailEvent}
+          selectedOdds={selectedOddKeys} onSelect={toggleOfferOdd} onOpen={setDetailEvent}
           header={showVoice ? <VoicePanel
             count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
             onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)}
@@ -255,16 +288,18 @@ function App() {
           {showVoice && <VoicePanel count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
             onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)} onReset={() => setCount(0)}
             onToggleActivity={toggleLiveActivity} onToggleVoice={toggleVoiceInput} onNotify={sendNotification} />}
-          {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} selectedOdd={selectedOdd} onBack={() => setDetailEvent(null)} onSelect={setSelectedOdd} onAddBuilder={(picks, combinedOdds) => { setBuilderDraft({ picks, combinedOdds }); setDetailEvent(null); }} />}
-          {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdd={selectedOdd} onSelect={setSelectedOdd} />}
-          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(selectedOdd || builderDraft)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
+          {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
+          {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={toggleOfferOdd} />}
+          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(slip?.selections.length)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
           {activeTab === 'Casino' && <CasinoScreen />}
           {activeTab === 'Menu' && <MenuScreen />}
         </ScrollView>}
-        {(selectedOdd || builderDraft) && <View style={styles.betBar}>
-          <View><Text style={styles.betBarLabel}>BET SLIP · {builderDraft?.picks.length ?? 1} PICK{builderDraft && builderDraft.picks.length > 1 ? 'S' : ''}</Text><Text style={styles.betBarOdds}>{builderDraft ? `BetBuilder · ${builderDraft.combinedOdds.toFixed(2)}` : 'Selection ready'}</Text></View>
-          <Pressable onPress={() => setActiveTab('Tickets')} style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>OPEN</Text></Pressable>
-        </View>}
+        <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
+          onMode={async mode => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, mode, ...(mode === 'system' ? { systemSize: Math.max(1, slip.selections.length - 1) } : {}) })); }}
+          onStake={async value => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: value })); }}
+          onRemove={async selectionId => { if (slip) setSlip(await api.removeSlipSelection(slipOwnerId, slipTab, selectionId, slip.version)); }}
+          onAccept={async () => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, acceptOddsChanges: true })); }}
+          onClear={async () => { if (slip) setSlip(await api.clearSlip(slipOwnerId, slipTab, slip.version)); }} onPlace={() => { setActiveTab('Tickets'); setSlipView('compact'); }} />
         <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); }} />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -306,9 +341,9 @@ function QuickLinks() {
 
 type OfferRow = { kind: 'league'; league: OfferLeague } | { kind: 'event'; leagueId: string; event: Event };
 
-function OfferHome({ offer, events, loading, failed, selectedOdd, onSelect, onOpen, header }: {
-  offer: OfferResponse | null; events: Event[]; loading: boolean; failed: boolean; selectedOdd: string | null;
-  onSelect: (value: string | null) => void; onOpen: (event: Event) => void; header: React.ReactElement | null;
+function OfferHome({ offer, events, loading, failed, selectedOdds, onSelect, onOpen, header }: {
+  offer: OfferResponse | null; events: Event[]; loading: boolean; failed: boolean; selectedOdds: Set<string>;
+  onSelect: (value: string) => void; onOpen: (event: Event) => void; header: React.ReactElement | null;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pinned, setPinned] = useState<Set<string>>(new Set());
@@ -343,7 +378,7 @@ function OfferHome({ offer, events, loading, failed, selectedOdd, onSelect, onOp
     renderItem={({ item }) => item.kind === 'league' ? <View style={styles.leagueHeader} testID={`league-${item.league.id}`}>
       <Pressable testID={`pin-${item.league.id}`} accessibilityRole="button" accessibilityLabel={`Pin ${item.league.name}`} onPress={() => toggleSet(setPinned, item.league.id)}><Text style={[styles.pin, pinned.has(item.league.id) && styles.pinActive]}>★</Text></Pressable>
       <Pressable testID={`toggle-${item.league.id}`} accessibilityRole="button" accessibilityState={{ expanded: !collapsed.has(item.league.id) }} style={styles.leagueHeaderMain} onPress={() => toggleSet(setCollapsed, item.league.id)}><Text style={styles.leagueHeaderName}>{item.league.name.toUpperCase()}</Text><Text style={styles.chevron}>{collapsed.has(item.league.id) ? '›' : '⌄'}</Text></Pressable>
-    </View> : <EventCard event={item.event} selectedOdd={selectedOdd} onSelect={onSelect} onOpen={() => onOpen(item.event)} isFavorite={favorites.has(item.event.id)} onToggleFavorite={() => toggleSet(setFavorites, item.event.id)} />}
+    </View> : <EventCard event={item.event} selectedOdds={selectedOdds} onSelect={onSelect} onOpen={() => onOpen(item.event)} isFavorite={favorites.has(item.event.id)} onToggleFavorite={() => toggleSet(setFavorites, item.event.id)} />}
   />;
 }
 
@@ -351,7 +386,7 @@ function OfferSkeleton() {
   return <View testID="offer-skeleton">{[0, 1, 2].map(item => <View key={item} style={styles.skeletonCard}><View style={styles.skeletonLine} /><View style={styles.skeletonLineShort} /></View>)}</View>;
 }
 
-function EventCard({ event, selectedOdd, onSelect, onOpen, isFavorite, onToggleFavorite }: { event: Event; selectedOdd: string | null; onSelect: (value: string | null) => void; onOpen?: () => void; isFavorite?: boolean; onToggleFavorite?: () => void }) {
+function EventCard({ event, selectedOdds, onSelect, onOpen, isFavorite, onToggleFavorite }: { event: Event; selectedOdds: Set<string>; onSelect: (value: string) => void; onOpen?: () => void; isFavorite?: boolean; onToggleFavorite?: () => void }) {
   return <View style={styles.eventCard} testID={`event-${event.id}`}>
     <View style={styles.eventTopline}><View style={styles.eventLabelRow}>{onToggleFavorite && <Pressable testID={`favorite-${event.id}`} accessibilityRole="button" accessibilityLabel={`${isFavorite ? 'Remove' : 'Add'} ${event.home} favorite`} onPress={onToggleFavorite}><Text style={[styles.eventFavorite, isFavorite && styles.eventFavoriteActive]}>★</Text></Pressable>}<Text style={styles.eventBadge}>{event.label}</Text></View><Text style={styles.eventStarts}>{event.starts}</Text></View>
     <View style={styles.leagueRow}><Text style={styles.league}>{event.league}</Text><Text style={styles.chevron}>⌄</Text></View>
@@ -359,9 +394,9 @@ function EventCard({ event, selectedOdd, onSelect, onOpen, isFavorite, onToggleF
     <View style={styles.marketMeta}><View style={styles.badgeRail}><Text style={styles.marketName}>MATCH RESULT</Text>{event.features.includes('betBuilder') && <Text style={styles.miniBadge}>BB</Text>}{event.features.includes('tv') && <Text style={styles.miniBadge}>TV</Text>}{event.features.includes('bonusTip') && <Text style={styles.miniBadge}>BONUS</Text>}</View><Text style={styles.moreMarkets}>+{event.totalMarketCount} markets</Text></View>
     <View style={styles.oddsRow}>{event.markets.map((odd, index) => {
       const key = `${event.id}-${index}`;
-      const selected = selectedOdd === key;
+      const selected = selectedOdds.has(key);
       const disabled = odd.state === 'locked' || odd.state === 'disabled';
-      return <Pressable key={key} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected, disabled }} onPress={() => onSelect(selected ? null : key)} style={[styles.oddButton, odd.state === 'changed' && styles.oddButtonChanged, disabled && styles.oddButtonDisabled, selected && styles.oddButtonSelected]} testID={`odd-${key}`}>
+      return <Pressable key={key} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected, disabled }} onPress={() => onSelect(key)} style={[styles.oddButton, odd.state === 'changed' && styles.oddButtonChanged, disabled && styles.oddButtonDisabled, selected && styles.oddButtonSelected]} testID={`odd-${key}`}>
         <Text style={[styles.oddLabel, selected && styles.oddTextSelected]}>{odd.label}</Text>
         <View style={styles.oddValues}>{odd.previous && <Text style={styles.previousOdd}>{odd.previous}</Text>}<Text style={[styles.oddValue, selected && styles.oddTextSelected]}>{disabled ? '—' : odd.value}</Text></View>
       </Pressable>;
@@ -397,7 +432,7 @@ function VoicePanel(props: VoicePanelProps) {
   </View>;
 }
 
-function EventDetail({ event, onBack, onAddBuilder }: { event: Event; selectedOdd: string | null; onBack: () => void; onSelect: (value: string | null) => void; onAddBuilder: (picks: BuilderPick[], combinedOdds: number) => void }) {
+function EventDetail({ event, onBack, onAddBuilder }: { event: Event; onBack: () => void; onAddBuilder: (picks: BuilderPick[], combinedOdds: number) => void }) {
   const [detail, setDetail] = useState<EventDetailResponse | null>(null);
   const [view, setView] = useState<'Markets' | 'Stats' | 'Lineups'>('Markets');
   const [group, setGroup] = useState<DetailedMarket['group'] | 'all'>('all');
@@ -444,12 +479,43 @@ function EventDetail({ event, onBack, onAddBuilder }: { event: Event; selectedOd
   </View>;
 }
 
-function LiveScreen({ events: liveEvents, selectedOdd, onSelect }: { events: Event[]; selectedOdd: string | null; onSelect: (value: string | null) => void }) {
+function LiveScreen({ events: liveEvents, selectedOdds, onSelect }: { events: Event[]; selectedOdds: Set<string>; onSelect: (value: string) => void }) {
   const liveEvent: Event = liveEvents[0] ?? { id: 'dinamo-hajduk', label: '● LIVE  67\'', league: 'CROATIA · HNL', starts: '1 – 1', home: 'Dinamo Zagreb', away: 'Hajduk Split', markets: [{ label: '1', value: '2.05', state: 'active' }, { label: 'X', value: '2.80', state: 'active' }, { label: '2', value: '4.10', state: 'active' }], features: ['tv'], totalMarketCount: 28 };
   return <View testID="live-screen">
     <View style={styles.filters}><Text style={styles.filterTitle}>LIVE NOW</Text><Text style={styles.liveCount}>1 EVENT</Text></View>
-    <EventCard event={liveEvent} selectedOdd={selectedOdd} onSelect={onSelect} />
+    <EventCard event={liveEvent} selectedOdds={selectedOdds} onSelect={onSelect} />
     <View style={styles.infoCard}><Text style={styles.infoTitle}>Live updates</Text><Text style={styles.infoBody}>Scores, clocks and market availability update through the realtime channel.</Text></View>
+  </View>;
+}
+
+function SlipSheet({ slip, busy, view, onView, activeTab, onTab, onMode, onStake, onRemove, onAccept, onClear, onPlace }: {
+  slip: BetSlip | null; busy: boolean; view: 'compact' | 'expanded' | 'full'; onView: (value: 'compact' | 'expanded' | 'full') => void;
+  activeTab: number; onTab: (value: number) => void; onMode: (mode: SlipMode) => void; onStake: (minorUnits: number) => void;
+  onRemove: (selectionId: string) => void; onAccept: () => void; onClear: () => void; onPlace: () => void;
+}) {
+  const [stakeText, setStakeText] = useState('1.00');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 12,
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dy < -40) onView(view === 'compact' ? 'expanded' : 'full');
+      if (gesture.dy > 40) onView(view === 'full' ? 'expanded' : 'compact');
+    },
+  }), [onView, view]);
+  useEffect(() => { setStakeText(((slip?.stake.minorUnits ?? 100) / 100).toFixed(2)); }, [slip?.stake.minorUnits]);
+  const count = slip?.selections.length ?? 0;
+  const compact = view === 'compact';
+  return <View style={[styles.slipSheet, view === 'expanded' && styles.slipSheetExpanded, view === 'full' && styles.slipSheetFull]} testID="slip-sheet">
+    <Pressable {...panResponder.panHandlers} accessibilityRole="button" accessibilityLabel={`${compact ? 'Expand' : 'Collapse'} bet slip`} onPress={() => onView(compact ? 'expanded' : 'compact')} style={styles.slipHandle} testID="slip-handle"><View style={styles.slipHandleBar} /></Pressable>
+    <View style={styles.slipSummary}><View><Text testID="slip-count" style={styles.betBarLabel}>BET SLIP · {count} PICK{count === 1 ? '' : 'S'}</Text><Text style={styles.betBarOdds}>{count ? `${slip?.mode.toUpperCase()} · ${slip?.totals?.totalOdds.toFixed(2) ?? '—'}` : 'Tap any available odds to start'}</Text></View><View style={styles.slipSummaryActions}>{!compact && <Pressable testID="slip-full-button" onPress={() => onView(view === 'full' ? 'expanded' : 'full')}><Text style={styles.builderReset}>{view === 'full' ? 'SHEET' : 'FULL'}</Text></Pressable>}<Pressable onPress={() => onView(compact ? 'expanded' : 'compact')} style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>{compact ? 'OPEN' : 'CLOSE'}</Text></Pressable></View></View>
+    {!compact && <ScrollView keyboardShouldPersistTaps="handled" style={styles.slipBody}>
+      <View style={styles.savedTabs}>{[1, 2, 3, 4].map(tab => <Pressable key={tab} testID={`slip-tab-${tab}`} onPress={() => onTab(tab)} style={[styles.savedTab, tab === activeTab && styles.savedTabActive]}><Text style={styles.savedTabText}>{tab}</Text></Pressable>)}</View>
+      <View style={styles.slipModes}>{(['single', 'accumulator', 'system'] as const).map(mode => <Pressable key={mode} testID={`slip-mode-${mode}`} onPress={() => onMode(mode)} style={[styles.slipMode, slip?.mode === mode && styles.slipModeActive]}><Text style={styles.slipModeText}>{mode.toUpperCase()}</Text></Pressable>)}</View>
+      {!count && <EmptyState icon="▤" title={`Slip ${activeTab} is empty`} body="Selections are saved independently in each numbered tab." />}
+      {slip?.selections.map(selection => <View key={selection.selectionId} style={styles.slipSelection} testID={`slip-selection-${selection.selectionId}`}><View style={styles.slipSelectionCopy}><Text style={styles.slipEvent}>{selection.eventLabel}</Text><Text style={styles.slipMarket}>{selection.marketLabel} · {selection.selectionLabel}</Text>{selection.state !== 'active' && <Text style={styles.slipSelectionState}>{selection.state.toUpperCase()}</Text>}</View><Text style={styles.slipOdd}>{selection.currentOdds.toFixed(2)}</Text><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${selection.selectionLabel}`} onPress={() => onRemove(selection.selectionId)}><Text style={styles.slipRemove}>×</Text></Pressable></View>)}
+      {slip?.warnings.map(warning => <View key={`${warning.code}-${warning.selectionIds.join('-')}`} style={styles.slipWarning}><Text style={styles.slipWarningCode}>{warning.code.replaceAll('_', ' ')}</Text><Text style={styles.slipWarningText}>{warning.message}</Text>{warning.code === 'ODDS_CHANGED' && <Pressable testID="accept-odds-button" onPress={onAccept}><Text style={styles.slipWarningAction}>ACCEPT NEW ODDS</Text></Pressable>}</View>)}
+      {count > 0 && <><View style={styles.stakeRow}><Text style={styles.stakeLabel}>TOTAL STAKE</Text><TextInput testID="stake-input" value={stakeText} onChangeText={setStakeText} onEndEditing={() => onStake(Math.max(0, Math.round((Number(stakeText) || 0) * 100)))} keyboardType="decimal-pad" style={styles.stakeInput} /></View><View style={styles.slipTotals}><Text style={styles.stakeLabel}>LINES  {slip?.totals?.lines ?? '—'}</Text><Text style={styles.stakeLabel}>BONUS  {((slip?.totals?.bonusMinorUnits ?? 0) / 100).toFixed(2)}</Text><Text style={styles.slipReturn}>{((slip?.totals?.potentialReturnMinorUnits ?? 0) / 100).toFixed(2)} DCO</Text></View><View style={styles.slipFooter}><Pressable testID="clear-slip-button" onPress={() => { if (confirmClear) { onClear(); setConfirmClear(false); } else setConfirmClear(true); }}><Text style={styles.clearSlip}>{confirmClear ? 'TAP AGAIN TO CLEAR' : 'CLEAR'}</Text></Pressable><Pressable testID="reconcile-slip-button" disabled={busy || Boolean(slip?.warnings.length)} onPress={onPlace} style={[styles.placeButton, (busy || Boolean(slip?.warnings.length)) && styles.disabled]}><Text style={styles.placeButtonText}>{busy ? 'SYNCING…' : 'REVIEW TICKET'}</Text></Pressable></View></>}
+    </ScrollView>}
   </View>;
 }
 
@@ -596,6 +662,38 @@ const styles = StyleSheet.create({
   betBarOdds: { color: '#AAB3BF', fontSize: 9, marginTop: 3 },
   betButton: { backgroundColor: '#20A20E', borderRadius: 3, paddingHorizontal: 22, paddingVertical: 10 },
   betButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  slipSheet: { minHeight: 58, backgroundColor: '#202833', borderTopWidth: 1, borderTopColor: '#4A5564' },
+  slipSheetExpanded: { height: 365 },
+  slipSheetFull: { height: '72%' },
+  slipHandle: { height: 12, alignItems: 'center', justifyContent: 'center' },
+  slipHandleBar: { width: 42, height: 3, borderRadius: 2, backgroundColor: '#697687' },
+  slipSummary: { minHeight: 46, paddingHorizontal: 13, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  slipSummaryActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  slipBody: { borderTopWidth: 1, borderTopColor: '#343E4B', paddingHorizontal: 10 },
+  savedTabs: { flexDirection: 'row', marginTop: 9, gap: 5 },
+  savedTab: { flex: 1, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#313A46' },
+  savedTabActive: { backgroundColor: '#1264C5' },
+  savedTabText: { color: '#FFFFFF', fontSize: 8, fontWeight: '900' },
+  slipModes: { flexDirection: 'row', marginTop: 7, marginBottom: 5, gap: 5 },
+  slipMode: { flex: 1, height: 31, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  slipModeActive: { borderBottomColor: '#4A9FFF' },
+  slipModeText: { color: '#C2CAD4', fontSize: 8, fontWeight: '900' },
+  slipSelection: { minHeight: 55, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#35404D', flexDirection: 'row', alignItems: 'center' },
+  slipSelectionCopy: { flex: 1 },
+  slipEvent: { color: '#FFFFFF', fontSize: 9, fontWeight: '800' },
+  slipMarket: { color: '#9EA9B7', fontSize: 8, marginTop: 3 },
+  slipSelectionState: { color: '#F2A443', fontSize: 7, fontWeight: '900', marginTop: 3 },
+  slipOdd: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', marginHorizontal: 12 },
+  slipRemove: { color: '#94A0AE', fontSize: 21, paddingHorizontal: 5 },
+  slipWarning: { marginTop: 7, padding: 9, backgroundColor: '#422D20', borderLeftWidth: 2, borderLeftColor: '#F2A443' },
+  slipWarningCode: { color: '#FFB762', fontSize: 7, fontWeight: '900' },
+  slipWarningText: { color: '#F3DDD0', fontSize: 8, marginTop: 3 },
+  slipWarningAction: { color: '#75B8FF', fontSize: 7, fontWeight: '900', marginTop: 6 },
+  stakeInput: { width: 100, height: 34, paddingHorizontal: 9, color: '#FFFFFF', textAlign: 'right', backgroundColor: '#151C25', borderWidth: 1, borderColor: '#44505F' },
+  slipTotals: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  slipReturn: { color: '#5CDF7B', fontSize: 13, fontWeight: '900' },
+  slipFooter: { paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  clearSlip: { color: '#FF858C', fontSize: 8, fontWeight: '900' },
   bottomNav: { height: 61, backgroundColor: '#080C11', borderTopWidth: 1, borderTopColor: '#242A32', flexDirection: 'row', paddingBottom: 4 },
   bottomTab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   bottomIcon: { color: '#98A1AD', fontSize: 17 },

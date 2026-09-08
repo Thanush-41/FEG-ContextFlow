@@ -5,7 +5,8 @@ import { OfferService } from '../src/offer/offer.service.js';
 import type { PskOfferProvider } from '../src/offer/psk-offer.provider.js';
 import { EventDetailService } from '../src/event-detail/event-detail.service.js';
 import { SportsService } from '../src/sports/sports.service.js';
-import { EVENT_DETAIL_MODEL, SPORTS_EVENT_MODEL, eventDetailSchema, sportsEventSchema } from '../src/persistence/models.js';
+import { SlipsService } from '../src/slips/slips.service.js';
+import { BET_SLIP_MODEL, EVENT_DETAIL_MODEL, SPORTS_EVENT_MODEL, betSlipSchema, eventDetailSchema, sportsEventSchema } from '../src/persistence/models.js';
 
 describe('MongoDB offer cache', () => {
   let server: MongoMemoryServer;
@@ -48,5 +49,18 @@ describe('MongoDB offer cache', () => {
     expect(stored?.markets[0]?.outcomes[0]?.priceHistory).toHaveLength(2);
     expect(stored?.result?.winner).toBe('home');
     expect(stored?.lineups?.home).toHaveLength(11);
+  });
+
+  it('persists slips and rejects a concurrent stale price update deterministically', async () => {
+    const slipModel: Model<any> = mongoose.connection.model(BET_SLIP_MODEL, betSlipSchema);
+    const detail = new EventDetailService(new SportsService());
+    const firstClient = new SlipsService(detail, slipModel);
+    const secondClient = new SlipsService(detail, slipModel);
+    const created = await firstClient.add('guest-persist-001', 1, { eventId: 'event-chelsea-liverpool', marketId: 'event-chelsea-liverpool-market-0', selectionId: 'event-chelsea-liverpool-outcome-0-0', acceptedOdds: 1.6, expectedVersion: 0 });
+    const stale = await secondClient.get('guest-persist-001', 1);
+    expect(created.warnings[0]?.code).toBe('ODDS_CHANGED');
+    await firstClient.update('guest-persist-001', 1, { expectedVersion: created.version, acceptOddsChanges: true });
+    await expect(secondClient.update('guest-persist-001', 1, { expectedVersion: stale.version, stakeMinorUnits: 500 })).rejects.toMatchObject({ status: 409 });
+    expect(await slipModel.countDocuments({ ownerId: 'guest-persist-001', tab: 1 })).toBe(1);
   });
 });

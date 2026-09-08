@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 import type { SportsEvent } from '@feg/contracts';
 import { SPORTS_EVENT_MODEL } from '../persistence/models.js';
+import { LiveSimulationService } from '../live/live-simulation.service.js';
 
 const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
@@ -62,18 +63,25 @@ const events: SportsEvent[] = [
 
 @Injectable()
 export class SportsService {
-  constructor(@Optional() @InjectModel(SPORTS_EVENT_MODEL) private readonly eventModel?: Model<SportsEvent>) {}
+  constructor(
+    @Optional() @InjectModel(SPORTS_EVENT_MODEL) private readonly eventModel?: Model<SportsEvent>,
+    @Optional() @Inject(LiveSimulationService) private readonly live?: LiveSimulationService,
+  ) {}
 
   async list(status?: string) {
+    const liveEvents = this.live?.list().map(snapshot => snapshot.event) ?? [];
     if (this.eventModel) {
       const query = status ? { status: status as SportsEvent['status'] } : {};
       const documents = await this.eventModel.find(query).sort({ startsAt: 1 }).lean().exec();
-      if (documents.length) return documents.map(this.clean);
+      if (documents.length) return documents.map(this.clean).map(event => liveEvents.find(candidate => candidate.id === event.id) ?? event).filter(event => !status || event.status === status);
     }
-    return status ? events.filter(event => event.status === status) : events;
+    const current = events.map(event => liveEvents.find(candidate => candidate.id === event.id) ?? event);
+    return status ? current.filter(event => event.status === status) : current;
   }
 
   async get(eventId: string) {
+    const live = this.live?.get(eventId)?.event;
+    if (live) return live;
     const document = this.eventModel ? await this.eventModel.findOne({ id: eventId }).lean().exec() : null;
     const event = document ? this.clean(document) : events.find(candidate => candidate.id === eventId);
     if (!event) throw new NotFoundException('Event not found.');

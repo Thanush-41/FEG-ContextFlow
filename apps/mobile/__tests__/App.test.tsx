@@ -5,6 +5,7 @@
 import React from 'react';
 import ReactTestRenderer, { ReactTestInstance } from 'react-test-renderer';
 import App from '../App';
+jest.mock('../useLiveFeed', () => ({ useLiveFeed: () => ({ snapshots: {}, status: 'stale' }) }));
 
 jest.mock(
   'react-native-safe-area-context',

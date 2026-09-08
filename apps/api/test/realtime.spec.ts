@@ -5,6 +5,7 @@ import request from 'supertest';
 import { BetsController } from '../src/bets/bets.controller.js';
 import { BetsService } from '../src/bets/bets.service.js';
 import { RealtimeGateway } from '../src/realtime/realtime.gateway.js';
+import { LiveSimulationService } from '../src/live/live-simulation.service.js';
 
 describe('ticket realtime delivery', () => {
   let app: INestApplication;
@@ -12,11 +13,11 @@ describe('ticket realtime delivery', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [BetsController], providers: [BetsService, RealtimeGateway],
+      controllers: [BetsController], providers: [BetsService, LiveSimulationService, RealtimeGateway],
     }).compile();
     app = moduleRef.createNestApplication(); app.setGlobalPrefix('api'); await app.listen(0, '127.0.0.1');
     const address = app.getHttpServer().address() as { port: number };
-    socket = io(`http://127.0.0.1:${address.port}/realtime`, { transports: ['websocket'] });
+    socket = io(`http://127.0.0.1:${address.port}/realtime`, { transports: ['websocket'], auth: { token: 'realtime-test-user' } });
     await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject); });
   });
   afterAll(async () => { socket.close(); await app.close(); });

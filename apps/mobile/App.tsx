@@ -6,6 +6,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
+import { useLiveFeed } from './useLiveFeed';
 import type { BetBuilderValidation, BetSlip, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
@@ -86,6 +87,7 @@ function App() {
   const [isOfferLoading, setIsOfferLoading] = useState(true);
   const [offerError, setOfferError] = useState(false);
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
+  const liveFeed = useLiveFeed(apiBaseUrl(), slipOwnerId);
   const [ticket, setTicket] = useState<DemoTicket | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -97,6 +99,36 @@ function App() {
   const [slipBusy, setSlipBusy] = useState(false);
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
+
+  useEffect(() => {
+    const updates = Object.values(liveFeed.snapshots);
+    if (!updates.length) return;
+    setLiveEvents(updates.filter(snapshot => snapshot.event.status === 'live').map(snapshot => toUiEvent(snapshot.event)));
+    setOfferEvents(current => current.map(event => {
+      const next = updates.find(snapshot => snapshot.eventId === event.apiEventId);
+      return next ? toUiEvent(next.event) : event;
+    }));
+    setDetailEvent(current => {
+      const next = updates.find(snapshot => snapshot.eventId === current?.apiEventId);
+      return next ? toUiEvent(next.event) : current;
+    });
+  }, [liveFeed.snapshots]);
+
+  useEffect(() => {
+    if (liveFeed.status !== 'current') return;
+    let disposed = false;
+    let pending = false;
+    const refresh = setInterval(async () => {
+      if (pending || slipBusy) return;
+      pending = true;
+      try {
+        const next = await api.getSlip(slipOwnerId, slipTab);
+        if (!disposed) setSlip(current => current && current.tab === next.tab && current.version > next.version ? current : next);
+      } catch { /* Retain the last validated slip; placement still revalidates. */ }
+      finally { pending = false; }
+    }, 1000);
+    return () => { disposed = true; clearInterval(refresh); };
+  }, [liveFeed.status, slipTab, slipBusy]);
 
   useEffect(() => { countRef.current = count; }, [count]);
 
@@ -304,7 +336,7 @@ function App() {
             onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)} onReset={() => setCount(0)}
             onToggleActivity={toggleLiveActivity} onToggleVoice={toggleVoiceInput} onNotify={sendNotification} />}
           {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
-          {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={toggleOfferOdd} />}
+          {activeTab === 'Live' && <View><Text accessibilityRole="alert" style={styles.infoBody}>{liveFeed.status === 'current' ? 'Live feed connected · Demo simulation' : 'Live feed reconnecting · Prices may be stale'}</Text><LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={liveFeed.status === 'current' ? toggleOfferOdd : () => Alert.alert('Live feed unavailable', 'Wait for the current prices to reconnect.')} />{Object.values(liveFeed.snapshots).map(snapshot => <View key={snapshot.eventId} style={styles.infoCard}><Text style={styles.infoTitle}>{snapshot.period} · {snapshot.running ? 'Simulation running' : 'Simulation paused'}</Text>{snapshot.incidents.slice(-5).map(incident => <Text key={incident.id} style={styles.infoBody}>{Math.floor(incident.clockSeconds / 60)}′ {incident.label}</Text>)}</View>)}</View>}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} />}
           {activeTab === 'Casino' && <CasinoScreen />}
           {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : <MenuScreen onWallet={() => setWalletOpen(true)} />)}
@@ -495,10 +527,10 @@ function EventDetail({ event, onBack, onAddBuilder }: { event: Event; onBack: ()
 }
 
 function LiveScreen({ events: liveEvents, selectedOdds, onSelect }: { events: Event[]; selectedOdds: Set<string>; onSelect: (value: string) => void }) {
-  const liveEvent: Event = liveEvents[0] ?? { id: 'dinamo-hajduk', label: '● LIVE  67\'', league: 'CROATIA · HNL', starts: '1 – 1', home: 'Dinamo Zagreb', away: 'Hajduk Split', markets: [{ label: '1', value: '2.05', state: 'active' }, { label: 'X', value: '2.80', state: 'active' }, { label: '2', value: '4.10', state: 'active' }], features: ['tv'], totalMarketCount: 28 };
   return <View testID="live-screen">
-    <View style={styles.filters}><Text style={styles.filterTitle}>LIVE NOW</Text><Text style={styles.liveCount}>1 EVENT</Text></View>
-    <EventCard event={liveEvent} selectedOdds={selectedOdds} onSelect={onSelect} />
+    <View style={styles.filters}><Text style={styles.filterTitle}>LIVE NOW</Text><Text style={styles.liveCount}>{liveEvents.length} EVENTS</Text></View>
+    {liveEvents.map(event => <EventCard key={event.id} event={event} selectedOdds={selectedOdds} onSelect={onSelect} />)}
+    {!liveEvents.length && <Text style={styles.infoBody}>No live events are available.</Text>}
     <View style={styles.infoCard}><Text style={styles.infoTitle}>Live updates</Text><Text style={styles.infoBody}>Scores, clocks and market availability update through the realtime channel.</Text></View>
   </View>;
 }

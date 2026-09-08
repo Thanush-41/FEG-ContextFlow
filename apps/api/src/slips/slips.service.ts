@@ -84,7 +84,7 @@ export class SlipsService {
       const compact = detail.event.markets.find(item => item.id === marketId);
       const selection = compact?.selections.find(item => item.id === selectionId);
       if (!compact || !selection) throw new BadRequestException('Selection not found for this event.');
-      return { eventId, marketId, selectionId, eventLabel: `${detail.event.home} · ${detail.event.away}`, marketLabel: compact.name, selectionLabel: selection.label, acceptedOdds, currentOdds: selection.odds, state: selection.state === 'locked' || selection.state === 'disabled' ? 'suspended' : acceptedOdds === selection.odds ? 'active' : 'changed' };
+      return { eventId, marketId, selectionId, eventLabel: `${detail.event.home} · ${detail.event.away}`, marketLabel: compact.name, selectionLabel: selection.label, acceptedOdds, currentOdds: selection.odds, state: !['scheduled', 'live'].includes(detail.event.status) || selection.state === 'locked' || selection.state === 'disabled' ? 'suspended' : acceptedOdds === selection.odds ? 'active' : 'changed' };
     }
     return { eventId, marketId: market.id, selectionId, eventLabel: `${detail.event.home} · ${detail.event.away}`, marketLabel: market.name, selectionLabel: outcome.label, acceptedOdds, currentOdds: outcome.odds, state: market.status !== 'open' || outcome.state === 'locked' ? 'suspended' : acceptedOdds === outcome.odds ? 'active' : 'changed', compatibilityGroup: outcome.compatibilityGroup };
   }

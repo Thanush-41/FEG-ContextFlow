@@ -57,6 +57,51 @@ export const SportsEventSchema = z.object({
 });
 export type SportsEvent = z.infer<typeof SportsEventSchema>;
 
+export const LiveIncidentSchema = z.object({
+  id: PublicIdSchema,
+  type: z.enum(['kickoff', 'period', 'goal', 'card', 'suspension', 'resume', 'finished']),
+  clockSeconds: z.number().int().nonnegative(),
+  team: z.enum(['home', 'away']).optional(),
+  label: z.string().min(1),
+});
+export type LiveIncident = z.infer<typeof LiveIncidentSchema>;
+
+export const LiveEventSnapshotSchema = z.object({
+  eventId: PublicIdSchema,
+  version: z.number().int().positive(),
+  sequence: z.number().int().nonnegative(),
+  clockSeconds: z.number().int().nonnegative(),
+  period: z.string().min(1),
+  acceleration: z.number().int().positive().max(120),
+  running: z.boolean(),
+  event: SportsEventSchema,
+  incidents: z.array(LiveIncidentSchema),
+  emittedAt: z.string().datetime(),
+});
+export type LiveEventSnapshot = z.infer<typeof LiveEventSnapshotSchema>;
+
+export const LiveControlSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('start'), intervalMs: z.number().int().min(100).max(60_000).default(1_000), acceleration: z.number().int().min(1).max(120).default(15) }),
+  z.object({ action: z.literal('pause') }),
+  z.object({ action: z.literal('reset'), seed: z.number().int().nonnegative().default(41) }),
+  z.object({ action: z.literal('step'), seconds: z.number().int().min(1).max(600).default(15) }),
+  z.object({ action: z.literal('score'), team: z.enum(['home', 'away']) }),
+  z.object({ action: z.literal('suspend'), marketId: PublicIdSchema, suspended: z.boolean() }),
+  z.object({ action: z.literal('price'), selectionId: PublicIdSchema, odds: DecimalOddsSchema }),
+  z.object({ action: z.literal('complete') }),
+]);
+export type LiveControl = z.infer<typeof LiveControlSchema>;
+
+export const LiveUpdateEnvelopeSchema = z.object({
+  channel: z.enum(['event', 'score', 'market', 'incident', 'wallet', 'notification']),
+  eventId: PublicIdSchema.optional(),
+  sequence: z.number().int().nonnegative(),
+  version: z.number().int().positive(),
+  emittedAt: z.string().datetime(),
+  payload: z.unknown(),
+});
+export type LiveUpdateEnvelope = z.infer<typeof LiveUpdateEnvelopeSchema>;
+
 export const OfferTimeFilterSchema = z.enum(['live', 'today', '1h', '3h', 'tomorrow', 'all']);
 export type OfferTimeFilter = z.infer<typeof OfferTimeFilterSchema>;
 

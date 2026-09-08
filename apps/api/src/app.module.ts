@@ -10,10 +10,14 @@ import { SportsService } from './sports/sports.service.js';
 import { OfferController } from './offer/offer.controller.js';
 import { OfferService } from './offer/offer.service.js';
 import { PskOfferProvider } from './offer/psk-offer.provider.js';
+import { EventDetailController } from './event-detail/event-detail.controller.js';
+import { EventDetailService } from './event-detail/event-detail.service.js';
 import {
   DEMO_TICKET_MODEL,
+  EVENT_DETAIL_MODEL,
   SPORTS_EVENT_MODEL,
   demoTicketSchema,
+  eventDetailSchema,
   sportsEventSchema,
 } from './persistence/models.js';
 
@@ -24,6 +28,7 @@ const persistenceImports = mongoUri
       MongooseModule.forFeature([
         { name: SPORTS_EVENT_MODEL, schema: sportsEventSchema },
         { name: DEMO_TICKET_MODEL, schema: demoTicketSchema },
+        { name: EVENT_DETAIL_MODEL, schema: eventDetailSchema },
       ]),
     ]
   : [];
@@ -33,7 +38,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController],
-  providers: [RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController],
+  providers: [RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService],
 })
 export class AppModule {}

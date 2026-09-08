@@ -16,6 +16,7 @@ export const EventStatusSchema = z.enum([
   'live',
   'suspended',
   'finished',
+  'postponed',
   'cancelled',
 ]);
 export type EventStatus = z.infer<typeof EventStatusSchema>;
@@ -92,6 +93,49 @@ export const OfferResponseSchema = z.object({
   }),
 });
 export type OfferResponse = z.infer<typeof OfferResponseSchema>;
+
+export const DetailedOutcomeSchema = SelectionSchema.extend({
+  compatibilityGroup: z.string().min(1),
+  priceHistory: z.array(z.object({ odds: DecimalOddsSchema, recordedAt: z.string().datetime() })),
+});
+export type DetailedOutcome = z.infer<typeof DetailedOutcomeSchema>;
+
+export const DetailedMarketSchema = z.object({
+  id: PublicIdSchema,
+  group: z.enum(['main', 'goals', 'handicap', 'periods', 'players', 'specials']),
+  name: z.string().min(1),
+  layout: z.enum(['twoWay', 'threeWay', 'grid']),
+  status: z.enum(['open', 'suspended', 'settled']),
+  outcomes: z.array(DetailedOutcomeSchema).min(2),
+});
+export type DetailedMarket = z.infer<typeof DetailedMarketSchema>;
+
+export const EventDetailResponseSchema = z.object({
+  version: z.literal(1),
+  event: SportsEventSchema,
+  markets: z.array(DetailedMarketSchema).min(5).max(20),
+  periods: z.array(z.object({ name: z.string(), home: z.number().int().nonnegative(), away: z.number().int().nonnegative() })),
+  result: z.object({ home: z.number().int().nonnegative(), away: z.number().int().nonnegative(), winner: z.enum(['home', 'away', 'draw']).nullable() }).nullable(),
+  statistics: z.array(z.object({ label: z.string(), home: z.number(), away: z.number() })),
+  form: z.object({ home: z.array(z.enum(['W', 'D', 'L'])), away: z.array(z.enum(['W', 'D', 'L'])) }),
+  headToHead: z.array(z.object({ date: z.string().datetime(), home: z.string(), away: z.string(), score: z.string() })),
+  lineups: z.object({ home: z.array(z.string()), away: z.array(z.string()) }),
+  relatedEvents: z.array(SportsEventSchema),
+  cache: z.object({ maxAgeSeconds: z.number().int().nonnegative(), generatedAt: z.string().datetime() }),
+});
+export type EventDetailResponse = z.infer<typeof EventDetailResponseSchema>;
+
+export const BetBuilderValidationInputSchema = z.object({
+  selectionIds: z.array(PublicIdSchema).min(1).max(12),
+});
+export type BetBuilderValidationInput = z.infer<typeof BetBuilderValidationInputSchema>;
+
+export const BetBuilderValidationSchema = z.object({
+  valid: z.boolean(),
+  combinedOdds: z.number().min(1),
+  reasons: z.array(z.object({ code: z.string(), message: z.string(), selectionIds: z.array(PublicIdSchema) })),
+});
+export type BetBuilderValidation = z.infer<typeof BetBuilderValidationSchema>;
 
 export const BetSelectionInputSchema = z.object({
   eventId: PublicIdSchema,

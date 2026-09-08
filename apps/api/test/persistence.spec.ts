@@ -3,7 +3,9 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import type { SportsEvent } from '@feg/contracts';
 import { OfferService } from '../src/offer/offer.service.js';
 import type { PskOfferProvider } from '../src/offer/psk-offer.provider.js';
-import { SPORTS_EVENT_MODEL, sportsEventSchema } from '../src/persistence/models.js';
+import { EventDetailService } from '../src/event-detail/event-detail.service.js';
+import { SportsService } from '../src/sports/sports.service.js';
+import { EVENT_DETAIL_MODEL, SPORTS_EVENT_MODEL, eventDetailSchema, sportsEventSchema } from '../src/persistence/models.js';
 
 describe('MongoDB offer cache', () => {
   let server: MongoMemoryServer;
@@ -34,5 +36,17 @@ describe('MongoDB offer cache', () => {
     const cached = await offline.get('all', 0, 100);
     expect(cached.cache.source).toBe('mongodb');
     expect(cached.leagues[0]?.events[0]?.home).toBe('Cache Home');
+  });
+
+  it('persists versioned event markets, periods, statistics, lineups, and price history', async () => {
+    const detailModel: Model<any> = mongoose.connection.model(EVENT_DETAIL_MODEL, eventDetailSchema);
+    const service = new EventDetailService(new SportsService(), detailModel);
+    const detail = await service.get('event-basketball-finished');
+    const stored = await detailModel.findOne({ eventId: detail.event.id }).lean().exec();
+    expect(stored?.version).toBe(1);
+    expect(stored?.markets).toHaveLength(6);
+    expect(stored?.markets[0]?.outcomes[0]?.priceHistory).toHaveLength(2);
+    expect(stored?.result?.winner).toBe('home');
+    expect(stored?.lineups?.home).toHaveLength(11);
   });
 });

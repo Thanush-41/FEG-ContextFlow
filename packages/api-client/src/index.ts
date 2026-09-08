@@ -4,6 +4,8 @@ import {
   type PlaceDemoBet,
   type OfferResponse,
   type OfferTimeFilter,
+  type EventDetailResponse,
+  type BetBuilderValidation,
   type SportsEvent,
 } from '@feg/contracts';
 
@@ -34,6 +36,14 @@ export class ContextFlowClient {
 
   getOffer(timeFilter: OfferTimeFilter, cursor = 0, limit = 100): Promise<OfferResponse> {
     return this.get(`/api/offer?timeFilter=${timeFilter}&cursor=${cursor}&limit=${limit}`);
+  }
+
+  getEventDetail(eventId: string): Promise<EventDetailResponse> {
+    return this.get(`/api/events/${encodeURIComponent(eventId)}/detail`);
+  }
+
+  validateBetBuilder(eventId: string, selectionIds: string[]): Promise<BetBuilderValidation> {
+    return this.post(`/api/events/${encodeURIComponent(eventId)}/betbuilder/validate`, { selectionIds });
   }
 
   placeDemoBet(input: PlaceDemoBet): Promise<DemoTicket> {

@@ -37,7 +37,7 @@ describe('HealthController', () => {
 
   it('serves offer and live event feeds', async () => {
     const offer = await request(app.getHttpServer()).get('/api/sports/events').expect(200);
-    expect(offer.body).toHaveLength(2);
+    expect(offer.body).toHaveLength(6);
     const live = await request(app.getHttpServer()).get('/api/sports/events?status=live').expect(200);
     expect(live.body).toHaveLength(1);
     expect(live.body[0].score).toBe('1–1');

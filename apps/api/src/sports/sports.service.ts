@@ -25,6 +25,39 @@ const events: SportsEvent[] = [
       { id: 'selection-away-02', label: '2', odds: 4.1, state: 'active', features: [] },
     ] }],
   },
+  {
+    id: 'event-tennis-suspended', sport: 'Tennis', league: 'ATP Demo', startsAt: scheduledAt,
+    status: 'suspended', home: 'Player Alpha', away: 'Player Beta', features: [],
+    markets: [{ id: 'market-tennis-winner', name: 'Match winner', features: [], selections: [
+      { id: 'selection-tennis-home', label: '1', odds: 1.72, state: 'locked', features: [] },
+      { id: 'selection-tennis-away', label: '2', odds: 2.1, state: 'locked', features: [] },
+    ] }],
+  },
+  {
+    id: 'event-basketball-finished', sport: 'Basketball', league: 'Demo League', startsAt: new Date(Date.now() - 3_600_000).toISOString(),
+    status: 'finished', score: '88–82', home: 'City Hoops', away: 'United Five', features: [],
+    markets: [{ id: 'market-basketball-winner', name: 'Winner', features: [], selections: [
+      { id: 'selection-basketball-home', label: '1', odds: 1.8, state: 'locked', features: [] },
+      { id: 'selection-basketball-away', label: '2', odds: 2, state: 'locked', features: [] },
+    ] }],
+  },
+  {
+    id: 'event-hockey-postponed', sport: 'Hockey', league: 'Ice Demo', startsAt: scheduledAt,
+    status: 'postponed', home: 'North Blades', away: 'South Ice', features: [],
+    markets: [{ id: 'market-hockey-result', name: 'Match result', features: [], selections: [
+      { id: 'selection-hockey-home', label: '1', odds: 2.2, state: 'disabled', features: [] },
+      { id: 'selection-hockey-draw', label: 'X', odds: 3.4, state: 'disabled', features: [] },
+      { id: 'selection-hockey-away', label: '2', odds: 2.7, state: 'disabled', features: [] },
+    ] }],
+  },
+  {
+    id: 'event-generic-cancelled', sport: 'Generic', league: 'Demo Specials', startsAt: scheduledAt,
+    status: 'cancelled', home: 'Option Alpha', away: 'Option Beta', features: [],
+    markets: [{ id: 'market-generic-winner', name: 'Winner', features: [], selections: [
+      { id: 'selection-generic-home', label: '1', odds: 1.9, state: 'disabled', features: [] },
+      { id: 'selection-generic-away', label: '2', odds: 1.9, state: 'disabled', features: [] },
+    ] }],
+  },
 ];
 
 @Injectable()

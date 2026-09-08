@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Linking, NativeEventEmitter, NativeModules, Platform, Pressable,
-  ScrollView, StatusBar, StyleSheet, Text, View,
+  ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
-import type { OfferLeague, OfferResponse, OfferTimeFilter, SportsEvent } from '@feg/contracts';
+import type { BetBuilderValidation, DetailedMarket, EventDetailResponse, OfferLeague, OfferResponse, OfferTimeFilter, SportsEvent } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -28,6 +28,7 @@ type Event = {
   apiEventId?: string; apiMarketId?: string; apiSelectionIds?: readonly string[];
 };
 type Tab = 'Live' | 'Sport' | 'Tickets' | 'Casino' | 'Menu';
+type BuilderPick = { eventId: string; marketId: string; selectionId: string; acceptedOdds: number };
 
 const fallbackEvents: Event[] = [
   { id: 'chelsea-liverpool', label: 'BET BUILDER', league: 'ENGLAND · PREMIER LEAGUE', starts: 'STARTS IN 2H', home: 'Chelsea', away: 'Liverpool', markets: [{ label: '1', value: '2.25', state: 'active' }, { label: 'X', value: '3.40', state: 'changed', previous: '3.25' }, { label: '2', value: '2.40', state: 'active' }], features: ['betBuilder'], totalMarketCount: 38 },
@@ -86,6 +87,7 @@ function App() {
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
+  const [builderDraft, setBuilderDraft] = useState<{ picks: BuilderPick[]; combinedOdds: number } | null>(null);
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
 
@@ -202,7 +204,10 @@ function App() {
   };
 
   const placeDemoBet = async () => {
-    if (!selectedOdd) return;
+    if (!selectedOdd && !builderDraft) return;
+    let selections: BuilderPick[] = [];
+    if (builderDraft) selections = builderDraft.picks;
+    else if (selectedOdd) {
     const separator = selectedOdd.lastIndexOf('-');
     const eventId = selectedOdd.slice(0, separator);
     const selectionIndex = Number(selectedOdd.slice(separator + 1));
@@ -213,12 +218,14 @@ function App() {
       Alert.alert('Demo bet', 'Wait for the live offer to finish loading, then select again.');
       return;
     }
+      selections = [{ eventId: event.apiEventId, marketId: event.apiMarketId, selectionId, acceptedOdds }];
+    }
     setIsPlacingBet(true);
     try {
       const ticket = await api.placeDemoBet({
         idempotencyKey: 'f37970b1-1127-45b1-ab01-301f09772f0b',
         stake: { currency: 'DCO', minorUnits: 100 },
-        selections: [{ eventId: event.apiEventId, marketId: event.apiMarketId, selectionId, acceptedOdds }],
+        selections,
       });
       setTicketId(ticket.id);
     } catch (error) {
@@ -248,14 +255,14 @@ function App() {
           {showVoice && <VoicePanel count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
             onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)} onReset={() => setCount(0)}
             onToggleActivity={toggleLiveActivity} onToggleVoice={toggleVoiceInput} onNotify={sendNotification} />}
-          {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} selectedOdd={selectedOdd} onBack={() => setDetailEvent(null)} onSelect={setSelectedOdd} />}
+          {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} selectedOdd={selectedOdd} onBack={() => setDetailEvent(null)} onSelect={setSelectedOdd} onAddBuilder={(picks, combinedOdds) => { setBuilderDraft({ picks, combinedOdds }); setDetailEvent(null); }} />}
           {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdd={selectedOdd} onSelect={setSelectedOdd} />}
-          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(selectedOdd)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
+          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(selectedOdd || builderDraft)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
           {activeTab === 'Casino' && <CasinoScreen />}
           {activeTab === 'Menu' && <MenuScreen />}
         </ScrollView>}
-        {selectedOdd && <View style={styles.betBar}>
-          <View><Text style={styles.betBarLabel}>BET SLIP · 1 PICK</Text><Text style={styles.betBarOdds}>Selection ready</Text></View>
+        {(selectedOdd || builderDraft) && <View style={styles.betBar}>
+          <View><Text style={styles.betBarLabel}>BET SLIP · {builderDraft?.picks.length ?? 1} PICK{builderDraft && builderDraft.picks.length > 1 ? 'S' : ''}</Text><Text style={styles.betBarOdds}>{builderDraft ? `BetBuilder · ${builderDraft.combinedOdds.toFixed(2)}` : 'Selection ready'}</Text></View>
           <Pressable onPress={() => setActiveTab('Tickets')} style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>OPEN</Text></Pressable>
         </View>}
         <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); }} />
@@ -348,7 +355,7 @@ function EventCard({ event, selectedOdd, onSelect, onOpen, isFavorite, onToggleF
   return <View style={styles.eventCard} testID={`event-${event.id}`}>
     <View style={styles.eventTopline}><View style={styles.eventLabelRow}>{onToggleFavorite && <Pressable testID={`favorite-${event.id}`} accessibilityRole="button" accessibilityLabel={`${isFavorite ? 'Remove' : 'Add'} ${event.home} favorite`} onPress={onToggleFavorite}><Text style={[styles.eventFavorite, isFavorite && styles.eventFavoriteActive]}>★</Text></Pressable>}<Text style={styles.eventBadge}>{event.label}</Text></View><Text style={styles.eventStarts}>{event.starts}</Text></View>
     <View style={styles.leagueRow}><Text style={styles.league}>{event.league}</Text><Text style={styles.chevron}>⌄</Text></View>
-    <Pressable onPress={onOpen} style={styles.teams}><Text style={styles.team}>{event.home}</Text><Text style={styles.team}>{event.away}</Text></Pressable>
+    <Pressable testID={`open-event-${event.id}`} onPress={onOpen} style={styles.teams}><Text style={styles.team}>{event.home}</Text><Text style={styles.team}>{event.away}</Text></Pressable>
     <View style={styles.marketMeta}><View style={styles.badgeRail}><Text style={styles.marketName}>MATCH RESULT</Text>{event.features.includes('betBuilder') && <Text style={styles.miniBadge}>BB</Text>}{event.features.includes('tv') && <Text style={styles.miniBadge}>TV</Text>}{event.features.includes('bonusTip') && <Text style={styles.miniBadge}>BONUS</Text>}</View><Text style={styles.moreMarkets}>+{event.totalMarketCount} markets</Text></View>
     <View style={styles.oddsRow}>{event.markets.map((odd, index) => {
       const key = `${event.id}-${index}`;
@@ -390,15 +397,50 @@ function VoicePanel(props: VoicePanelProps) {
   </View>;
 }
 
-function EventDetail({ event, selectedOdd, onBack, onSelect }: { event: Event; selectedOdd: string | null; onBack: () => void; onSelect: (value: string | null) => void }) {
+function EventDetail({ event, onBack, onAddBuilder }: { event: Event; selectedOdd: string | null; onBack: () => void; onSelect: (value: string | null) => void; onAddBuilder: (picks: BuilderPick[], combinedOdds: number) => void }) {
+  const [detail, setDetail] = useState<EventDetailResponse | null>(null);
+  const [view, setView] = useState<'Markets' | 'Stats' | 'Lineups'>('Markets');
+  const [group, setGroup] = useState<DetailedMarket['group'] | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [validation, setValidation] = useState<BetBuilderValidation | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [favorite, setFavorite] = useState(false);
+  const eventId = event.apiEventId;
+  useEffect(() => {
+    if (!eventId) { setFailed(true); return; }
+    api.getEventDetail(eventId).then(value => {
+      setDetail(value); setExpanded(new Set(value.markets.slice(0, 2).map(market => market.id)));
+    }).catch(() => setFailed(true));
+  }, [eventId]);
+  const markets = detail?.markets.filter(market => (group === 'all' || market.group === group) && market.name.toLowerCase().includes(query.toLowerCase())) ?? [];
+  const toggleSelection = async (selectionId: string) => {
+    if (!eventId) return;
+    const next = selectedIds.includes(selectionId) ? selectedIds.filter(id => id !== selectionId) : [...selectedIds, selectionId];
+    setSelectedIds(next);
+    if (!next.length) { setValidation(null); return; }
+    try { setValidation(await api.validateBetBuilder(eventId, next)); } catch { setValidation({ valid: false, combinedOdds: 1, reasons: [{ code: 'VALIDATION_FAILED', message: 'Selections could not be validated.', selectionIds: next }] }); }
+  };
+  const addBuilder = () => {
+    if (!detail || !eventId || !validation?.valid) return;
+    const picks = detail.markets.flatMap(market => market.outcomes.filter(outcome => selectedIds.includes(outcome.id)).map(outcome => ({ eventId, marketId: market.id, selectionId: outcome.id, acceptedOdds: outcome.odds })));
+    onAddBuilder(picks, validation.combinedOdds);
+  };
   return <View testID="event-detail-screen">
-    <Pressable onPress={onBack} style={styles.screenHeading}><Text style={styles.backText}>‹</Text><Text style={styles.screenTitle}>EVENT DETAILS</Text></Pressable>
-    <View style={styles.scoreboard}><Text style={styles.scoreMeta}>{event.league}</Text><Text style={styles.scoreTeams}>{event.home}  vs  {event.away}</Text><Text style={styles.scoreTime}>{event.starts}</Text></View>
-    <Text style={styles.groupHeading}>MAIN MARKETS</Text>
-    <EventCard event={event} selectedOdd={selectedOdd} onSelect={onSelect} />
-    <Text style={styles.groupHeading}>GOALS</Text>
-    <View style={styles.marketPlaceholder}><Text style={styles.marketPlaceholderText}>Over 2.5</Text><Text style={styles.marketPlaceholderOdd}>1.84</Text></View>
-    <View style={styles.marketPlaceholder}><Text style={styles.marketPlaceholderText}>Under 2.5</Text><Text style={styles.marketPlaceholderOdd}>1.96</Text></View>
+    <View style={styles.screenHeading}><Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to sport offer"><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>EVENT DETAILS</Text><Pressable testID="detail-favorite" accessibilityRole="button" accessibilityLabel={`${favorite ? 'Remove' : 'Add'} event favorite`} accessibilityState={{ selected: favorite }} onPress={() => setFavorite(value => !value)}><Text style={[styles.detailFavorite, favorite && styles.eventFavoriteActive]}>★</Text></Pressable></View>
+    <View style={styles.scoreboard}><View style={styles.statusPill}><Text style={styles.statusText}>{(detail?.event.status ?? 'scheduled').toUpperCase()}</Text></View><Text style={styles.scoreMeta}>{event.league}</Text><Text style={styles.scoreTeams}>{event.home}  vs  {event.away}</Text><Text style={styles.scoreTime}>{detail?.event.score ?? event.starts}{detail?.event.clock ? ` · ${detail.event.clock}` : ''}</Text>{event.features.includes('tv') && <Text style={styles.streamBadge}>TV · STREAM AVAILABLE</Text>}</View>
+    <View style={styles.detailTabs}>{(['Markets', 'Stats', 'Lineups'] as const).map(item => <Pressable key={item} testID={`detail-${item.toLowerCase()}`} onPress={() => setView(item)} style={[styles.detailTab, view === item && styles.detailTabActive]}><Text style={styles.detailTabText}>{item.toUpperCase()}</Text></Pressable>)}</View>
+    {failed && <EmptyState icon="!" title="Details unavailable" body="Return to the offer and try this event again." />}
+    {!detail && !failed && <OfferSkeleton />}
+    {detail && view === 'Markets' && <>
+      <TextInput value={query} onChangeText={setQuery} placeholder="Search markets" placeholderTextColor="#6F7B89" style={styles.marketSearch} testID="market-search" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketGroups}>{(['all', 'main', 'goals', 'handicap', 'periods', 'specials'] as const).map(item => <Pressable key={item} onPress={() => setGroup(item)} style={[styles.marketGroupChip, group === item && styles.marketGroupChipActive]}><Text style={styles.marketGroupText}>{item.toUpperCase()}</Text></Pressable>)}</ScrollView>
+      {markets.map(market => <View key={market.id} style={styles.detailMarket} testID={`market-${market.id}`}><Pressable accessibilityRole="button" accessibilityState={{ expanded: expanded.has(market.id) }} onPress={() => setExpanded(value => { const next = new Set(value); next.has(market.id) ? next.delete(market.id) : next.add(market.id); return next; })} style={styles.detailMarketHeader}><Text style={styles.detailMarketName}>{market.name}</Text><Text style={styles.chevron}>{expanded.has(market.id) ? '⌄' : '›'}</Text></Pressable>{expanded.has(market.id) && <View style={styles.detailOutcomeGrid}>{market.outcomes.map(outcome => { const selected = selectedIds.includes(outcome.id); const disabled = market.status !== 'open' || outcome.state === 'locked'; return <Pressable key={outcome.id} testID={`builder-${outcome.id}`} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected, disabled }} onPress={() => toggleSelection(outcome.id)} style={[styles.detailOutcome, disabled && styles.oddButtonDisabled, selected && styles.oddButtonSelected]}><Text style={styles.detailOutcomeLabel}>{outcome.label}</Text><Text style={styles.detailOutcomeOdd}>{disabled ? '—' : outcome.odds.toFixed(2)}</Text></Pressable>; })}</View>}</View>)}
+      {selectedIds.length > 0 && <View style={styles.builderPanel}><View><Text style={styles.builderTitle}>BETBUILDER · {selectedIds.length} PICKS</Text><Text style={[styles.builderFeedback, validation?.valid === false && styles.builderError]}>{validation ? validation.valid ? `Combined odds ${validation.combinedOdds.toFixed(2)}` : validation.reasons[0]?.message : 'Checking compatibility…'}</Text></View><Pressable onPress={() => { setSelectedIds([]); setValidation(null); }}><Text style={styles.builderReset}>RESET</Text></Pressable><Pressable testID="add-builder-button" disabled={!validation?.valid} onPress={addBuilder} style={[styles.builderAdd, !validation?.valid && styles.disabled]}><Text style={styles.builderAddText}>ADD</Text></Pressable></View>}
+    </>}
+    {detail && view === 'Stats' && <View style={styles.statsPanel}>{detail.statistics.map(stat => <View key={stat.label} style={styles.statRow}><Text style={styles.statValue}>{stat.home}</Text><Text style={styles.statLabel}>{stat.label}</Text><Text style={styles.statValue}>{stat.away}</Text></View>)}<Text style={styles.groupHeading}>FORM</Text><Text style={styles.formText}>{detail.form.home.join('  ')}     {detail.form.away.join('  ')}</Text><Text style={styles.groupHeading}>HEAD TO HEAD</Text>{detail.headToHead.map(match => <Text key={match.date} style={styles.h2hText}>{match.home}  {match.score}  {match.away}</Text>)}</View>}
+    {detail && view === 'Lineups' && <View style={styles.lineupColumns}><View style={styles.lineupColumn}>{detail.lineups.home.map(player => <Text key={player} style={styles.lineupPlayer}>{player}</Text>)}</View><View style={styles.lineupColumn}>{detail.lineups.away.map(player => <Text key={player} style={styles.lineupPlayer}>{player}</Text>)}</View></View>}
   </View>;
 }
 
@@ -564,6 +606,42 @@ const styles = StyleSheet.create({
   screenTitle: { flex: 1, color: '#F4F6F9', fontSize: 13, fontWeight: '900' },
   sectionAction: { color: '#70AFFF', fontSize: 9, fontWeight: '900' },
   scoreboard: { margin: 10, padding: 18, backgroundColor: '#164B8D', alignItems: 'center' },
+  statusPill: { alignSelf: 'flex-start', backgroundColor: '#0B3260', paddingHorizontal: 7, paddingVertical: 3, marginBottom: 7 },
+  statusText: { color: '#8DCAFF', fontSize: 7, fontWeight: '900' },
+  streamBadge: { color: '#74C5FF', fontSize: 7, fontWeight: '900', marginTop: 10 },
+  detailFavorite: { color: '#F2C94C', fontSize: 16 },
+  detailTabs: { height: 42, flexDirection: 'row', backgroundColor: '#171F2A' },
+  detailTab: { flex: 1, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  detailTabActive: { borderBottomColor: '#2E8BFF' },
+  detailTabText: { color: '#C2CAD4', fontSize: 8, fontWeight: '900' },
+  marketSearch: { height: 38, margin: 10, paddingHorizontal: 12, color: '#FFFFFF', backgroundColor: '#1C2531', borderWidth: 1, borderColor: '#303B49' },
+  marketGroups: { paddingHorizontal: 10, paddingBottom: 9, gap: 5 },
+  marketGroupChip: { paddingHorizontal: 10, height: 29, justifyContent: 'center', backgroundColor: '#262F3B' },
+  marketGroupChipActive: { backgroundColor: '#1264C5' },
+  marketGroupText: { color: '#FFFFFF', fontSize: 7, fontWeight: '900' },
+  detailMarket: { marginHorizontal: 10, marginBottom: 6, backgroundColor: '#141C27', borderWidth: 1, borderColor: '#293442' },
+  detailMarketHeader: { height: 40, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  detailMarketName: { color: '#E7EBF0', fontSize: 10, fontWeight: '800' },
+  detailOutcomeGrid: { padding: 7, paddingTop: 0, flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  detailOutcome: { minWidth: '31.5%', flexGrow: 1, height: 39, paddingHorizontal: 9, backgroundColor: '#323B47', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  detailOutcomeLabel: { color: '#AEB7C3', fontSize: 8, fontWeight: '800' },
+  detailOutcomeOdd: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  builderPanel: { margin: 10, padding: 10, backgroundColor: '#202A36', borderTopWidth: 2, borderTopColor: '#27A519', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  builderTitle: { color: '#FFFFFF', fontSize: 8, fontWeight: '900' },
+  builderFeedback: { color: '#62D87D', fontSize: 8, marginTop: 4, maxWidth: 210 },
+  builderError: { color: '#FF7A83' },
+  builderReset: { color: '#85BFFF', fontSize: 7, fontWeight: '900' },
+  builderAdd: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#20A20E' },
+  builderAddText: { color: '#FFFFFF', fontSize: 8, fontWeight: '900' },
+  statsPanel: { padding: 10 },
+  statRow: { height: 42, borderBottomWidth: 1, borderBottomColor: '#29313D', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statValue: { width: 45, color: '#FFFFFF', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  statLabel: { color: '#98A3B0', fontSize: 9, fontWeight: '700' },
+  formText: { color: '#FFFFFF', textAlign: 'center', letterSpacing: 2 },
+  h2hText: { color: '#D2D8E0', textAlign: 'center', fontSize: 9 },
+  lineupColumns: { padding: 10, flexDirection: 'row', gap: 8 },
+  lineupColumn: { flex: 1, backgroundColor: '#151D28', padding: 10 },
+  lineupPlayer: { color: '#C8D0DA', fontSize: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#27313D' },
   scoreMeta: { color: '#91C8FF', fontSize: 8, fontWeight: '900' },
   scoreTeams: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', marginTop: 12 },
   scoreTime: { color: '#D8E9FF', fontSize: 10, marginTop: 8 },

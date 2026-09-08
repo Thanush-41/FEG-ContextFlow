@@ -36,6 +36,78 @@
         }
       },
       "updatedAt": "2026-09-08T12:35:06Z"
+    },
+    "menu": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "98dbe0c4-fb8b-4385-859f-f6608a21787c", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"98dbe0c4-fb8b-4385-859f-f6608a21787c":{"title":"Menu Drawer","visualDirection":"recording-matched navigation menu","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "event/:eventId": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "59317cad-7d8c-4b7f-90f7-ebf08f655c06", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"59317cad-7d8c-4b7f-90f7-ebf08f655c06":{"title":"ContextFlow Event Detail","visualDirection":"recording-matched dense event markets","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "betslip": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "2b32604d-e34e-43dd-8680-eecb8a17c84a", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"2b32604d-e34e-43dd-8680-eecb8a17c84a":{"title":"Demo Bet Slip","visualDirection":"recording-matched expanded demo slip","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "ticket/:ticketId": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "94f9c8f9-e533-42b4-8895-455fa58af00b", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"94f9c8f9-e533-42b4-8895-455fa58af00b":{"title":"Ticket Detail Screen","visualDirection":"recording-matched ticket lifecycle","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "sports/live": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "f31bc79a-13bd-4572-b3b4-a0c312129599", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"f31bc79a-13bd-4572-b3b4-a0c312129599":{"title":"Live Hub","visualDirection":"recording-matched live sports hub","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "casino": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "c5a2d507-b8df-4edb-83c2-5c27989034ed", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"c5a2d507-b8df-4edb-83c2-5c27989034ed":{"title":"Casino Lobby","visualDirection":"recording-matched casino grid","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "profile": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "6660833f-9970-4299-a5f7-fd149a1b0924", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"6660833f-9970-4299-a5f7-fd149a1b0924":{"title":"Profile and Wallet","visualDirection":"recording-matched account hub","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
+    },
+    "voice": {
+      "targetKind": "new-ui", "projectId": "2269be2a-7fd0-41cd-a203-2ff5589a9bbc",
+      "activeDraftId": "4b159a87-47e8-4ec6-ba3c-0b93964d2ab6", "designSystemPath": ".superdesign/design-system.md",
+      "sourceTarget": "sports/home", "sourceDraftId": "05763945-1fbe-4e71-b80f-aa13476386f4",
+      "referenceIds": ["661ace53-837a-41bd-973a-b9196d8aa9b3", "25ed8d3c-bfc3-429e-bb6e-7c9c8030bfaa", "37bede77-ec02-4c48-b7ad-ded7c2124161"],
+      "contextFiles": [".superdesign/design-system.md", ".superdesign/init/theme.md", "App.tsx", "docs/sprint-1/information-architecture.md", "docs/sprint-1/voice-agent-contract.md", "docs/sprint-1/video-reference-audit.md"],
+      "fingerprints": {".superdesign/design-system.md":"f8d0c5d2829b46f89db5434ba04b8d501b711c2dbfa1c6251e7a828ca471656d", ".superdesign/init/theme.md":"3fac99ba72beaf6e74c0bfc9dcf14c36932b73d038c07c7faa29554674b45fbb", "App.tsx":"477a2201fac1bff5642c4ee86195fd0d23ca9a7fdc2f9cc3e2e1e120c5c1c5e1", "docs/sprint-1/information-architecture.md":"c9bbc69762294fd6419fc4203477bc243cb9ab29f88f7cc371dfbaca06f2b2e6", "docs/sprint-1/voice-agent-contract.md":"880be779536c327fff8e5bf5b207f081946c44be347e2d5f43091d0529312f2e", "docs/sprint-1/video-reference-audit.md":"7284b7aee69bec79f591a61f1e1924d58cdd33409741321114f38aed0bc81102"},
+      "components": [], "drafts": {"4b159a87-47e8-4ec6-ba3c-0b93964d2ab6":{"title":"Voice Assistant","visualDirection":"recording-matched guarded voice agent","parentDraftId":"05763945-1fbe-4e71-b80f-aa13476386f4","currentVersion":1}}, "updatedAt":"2026-09-08T12:49:12Z"
     }
   }
 }

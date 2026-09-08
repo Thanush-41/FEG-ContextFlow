@@ -15,6 +15,25 @@ Live/Sport/Tickets/Casino/Menu navigation. Voice is reduced to a header action s
 it does not disturb the reference hierarchy. It is a design artifact only; the
 working React Native counter remains unchanged until this direction is approved.
 
+## Approved screen flow
+
+| Target | Preview |
+| --- | --- |
+| Sports offer | <https://p.superdesign.dev/draft/05763945-1fbe-4e71-b80f-aa13476386f4> |
+| Menu / drawer | <https://p.superdesign.dev/draft/98dbe0c4-fb8b-4385-859f-f6608a21787c> |
+| Event detail | <https://p.superdesign.dev/draft/59317cad-7d8c-4b7f-90f7-ebf08f655c06> |
+| Demo bet slip | <https://p.superdesign.dev/draft/2b32604d-e34e-43dd-8680-eecb8a17c84a> |
+| Ticket detail | <https://p.superdesign.dev/draft/94f9c8f9-e533-42b4-8895-455fa58af00b> |
+| Live hub | <https://p.superdesign.dev/draft/f31bc79a-13bd-4572-b3b4-a0c312129599> |
+| Casino lobby | <https://p.superdesign.dev/draft/c5a2d507-b8df-4edb-83c2-5c27989034ed> |
+| Profile and wallet | <https://p.superdesign.dev/draft/6660833f-9970-4299-a5f7-fd149a1b0924> |
+| Voice assistant | <https://p.superdesign.dev/draft/4b159a87-47e8-4ec6-ba3c-0b93964d2ab6> |
+
+The live `psk.hr` URL currently returns a geographic-block interstitial from the
+build environment, so the supplied recording remains the authoritative mobile
+reference. Generated screens were checked to contain ContextFlow/FEG identity
+and no PSK or captured provider name.
+
 ## Review checklist
 
 - Original, trademark-safe ContextFlow identity.

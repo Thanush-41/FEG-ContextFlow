@@ -1,5 +1,10 @@
 # FEG ContextFlow Counter
 
+> This working counter is the protected native-interaction skeleton for the
+> broader FEG ContextFlow product. Sprint foundation documents live in
+> [`docs/sprint-1`](docs/sprint-1/README.md). The baseline is preserved by the
+> Git tag `voice-native-skeleton-v1`.
+
 A small React Native counter app for iOS and Android. The shared UI lives in
 `App.tsx`; the `ios/` and `android/` directories contain the native projects.
 

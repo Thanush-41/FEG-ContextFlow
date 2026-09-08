@@ -23,12 +23,29 @@ export class SlipsService {
     this.validateIdentity(ownerId, tab);
     const key = this.key(ownerId, tab);
     const stored = this.slipModel ? await this.slipModel.findOne({ key }).lean().exec() : null;
-    if (stored) return this.clean(stored);
+    if (stored) return this.refresh(this.clean(stored));
     const existing = this.memory.get(key);
-    if (existing) return existing;
+    if (existing) return this.refresh(existing);
     const slip = this.empty(ownerId, tab);
     await this.save(slip);
     return slip;
+  }
+
+  private async refresh(slip: BetSlip): Promise<BetSlip> {
+    if (!slip.selections.length) return slip;
+    const selections = await Promise.all(slip.selections.map(async selection => {
+      try {
+        const current = await this.resolve(selection.eventId, selection.marketId, selection.selectionId, selection.acceptedOdds);
+        return { ...selection, ...current };
+      } catch {
+        return { ...selection, state: 'suspended' as const };
+      }
+    }));
+    const changed = selections.some((selection, index) => selection.currentOdds !== slip.selections[index]?.currentOdds || selection.state !== slip.selections[index]?.state);
+    if (!changed) return slip;
+    const next = this.reconcile({ ...slip, selections, version: slip.version + 1, updatedAt: new Date().toISOString() });
+    await this.save(next);
+    return next;
   }
 
   async add(ownerId: string, tab: number, candidate: unknown): Promise<BetSlip> {

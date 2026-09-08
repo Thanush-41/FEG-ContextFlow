@@ -66,7 +66,7 @@ describe('Sprint 8 atomic ticket placement', () => {
     const outcome = changed.markets.find(market => market.id === selected.marketId)?.outcomes.find(candidate => candidate.id === selected.selectionId);
     if (!outcome) throw new Error('Expected fixture outcome.');
     outcome.odds += 0.25;
-    jest.spyOn(details, 'get').mockResolvedValueOnce(changed);
+    jest.spyOn(details, 'get').mockResolvedValueOnce(current).mockResolvedValueOnce(changed);
     await request(app.getHttpServer()).post('/api/tickets/place').set(auth).send({ ownerId: user, tab: 3, expectedVersion: slip.body.version, idempotencyKey: '38e92752-8db6-4220-b263-12928cbdbce2' }).expect(400).expect(({ body }) => expect(body).toMatchObject({ code: 'STALE_ODDS' }));
   });
 

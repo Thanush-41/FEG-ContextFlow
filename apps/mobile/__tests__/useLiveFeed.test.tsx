@@ -14,7 +14,11 @@ const mockSocket: { connected: boolean; on: jest.Mock; timeout: jest.Mock; emitW
 };
 jest.mock('socket.io-client', () => ({ io: () => mockSocket }));
 jest.mock('@feg/api-client', () => ({ ContextFlowClient: jest.fn(() => ({ get: async () => [mockSnapshot] })) }));
-jest.mock('@feg/contracts', () => ({ LiveEventSnapshotSchema: { safeParse: (value: any) => ({ success: Boolean(value?.eventId), data: value }) } }));
+jest.mock('@feg/contracts', () => ({
+  LiveEventSnapshotSchema: { safeParse: (value: any) => ({ success: Boolean(value?.eventId), data: value }) },
+  WalletSchema: { safeParse: (value: any) => ({ success: Boolean(value?.userId), data: value }) },
+  DemoTicketSchema: { safeParse: (value: any) => ({ success: Boolean(value?.id), data: value }) },
+}));
 
 let feed: ReturnType<typeof useLiveFeed>;
 function Probe() { feed = useLiveFeed('http://localhost:3000', 'demo-user'); return null; }
@@ -36,6 +40,14 @@ test('resyncs on reconnect, batches newer prices, and cleans up on unmount', asy
     jest.advanceTimersByTime(100);
   });
   expect(feed.snapshots['event-demo'].version).toBe(10);
+  await act(async () => {
+    mockHandlers['wallet.updated']({ payload: { userId: 'demo-user', availableMinorUnits: 900 } });
+    mockHandlers['ticket.created']({ id: 'ticket-demo' });
+    mockHandlers['notification.updated']({ payload: { body: 'Ticket confirmed' } });
+  });
+  expect(feed.wallet?.availableMinorUnits).toBe(900);
+  expect(feed.ticket?.id).toBe('ticket-demo');
+  expect(feed.notification).toBe('Ticket confirmed');
   await act(async () => { mockHandlers.disconnect(); });
   expect(feed.status).toBe('stale');
   mockSnapshot = { ...mockSnapshot, version: 1 };

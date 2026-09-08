@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'node:crypto';
 import type { ClientSession, Model } from 'mongoose';
 import { LedgerEntrySchema, PublicIdSchema, WalletMutationSchema, WalletSchema, type LedgerEntry, type Wallet } from '@feg/contracts';
 import { LEDGER_ENTRY_MODEL, WALLET_MODEL } from '../persistence/models.js';
+import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 
 type WalletResult = { wallet: Wallet; entry: LedgerEntry };
 
@@ -14,6 +15,7 @@ export class WalletService {
   constructor(
     @Optional() @InjectModel(WALLET_MODEL) private readonly walletModel?: Model<Wallet>,
     @Optional() @InjectModel(LEDGER_ENTRY_MODEL) private readonly ledgerModel?: Model<LedgerEntry>,
+    @Optional() @Inject(RealtimeGateway) private readonly realtime?: RealtimeGateway,
   ) {}
 
   async get(userId: string, session?: ClientSession): Promise<Wallet> {
@@ -54,9 +56,12 @@ export class WalletService {
       try { await session.withTransaction(async () => { result = await this.apply(userId, parsed.data.amountMinorUnits, parsed.data.idempotencyKey, type, direction, undefined, session); }); }
       finally { await session.endSession(); }
       if (!result) throw new BadRequestException('Wallet transaction failed.');
+      this.realtime?.publishWallet(result.wallet);
       return result;
     }
-    return this.apply(userId, parsed.data.amountMinorUnits, parsed.data.idempotencyKey, type, direction);
+    const result = await this.apply(userId, parsed.data.amountMinorUnits, parsed.data.idempotencyKey, type, direction);
+    this.realtime?.publishWallet(result.wallet);
+    return result;
   }
 
   private async apply(userId: string, amount: number, idempotencyKey: string, type: LedgerEntry['type'], direction: 1 | -1, ticketId?: string, session?: ClientSession): Promise<WalletResult> {

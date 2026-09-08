@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { io } from 'socket.io-client';
-import { LiveEventSnapshotSchema, type LiveEventSnapshot } from '@feg/contracts';
+import { DemoTicketSchema, LiveEventSnapshotSchema, WalletSchema, type DemoTicket, type LiveEventSnapshot, type Wallet } from '@feg/contracts';
 import { ContextFlowClient } from '@feg/api-client';
 import { mergeLiveSnapshots } from './live-state';
 
 export function useLiveFeed(baseUrl: string, ownerId: string) {
   const [snapshots, setSnapshots] = useState<Record<string, LiveEventSnapshot>>({});
   const [status, setStatus] = useState<'connecting' | 'current' | 'stale'>('connecting');
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [ticket, setTicket] = useState<DemoTicket | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   useEffect(() => {
     const client = new ContextFlowClient(baseUrl, async () => ownerId);
     const socket = io(`${baseUrl}/realtime`, { autoConnect: false, transports: ['websocket'], auth: { token: ownerId } });
@@ -49,6 +52,17 @@ export function useLiveFeed(baseUrl: string, ownerId: string) {
         if (!disposed) setSnapshots(current => mergeLiveSnapshots(current, updates));
       }, 100);
     });
+    socket.on('wallet.updated', envelope => {
+      const parsed = WalletSchema.safeParse(envelope?.payload);
+      if (parsed.success && parsed.data.userId === ownerId) setWallet(parsed.data);
+    });
+    socket.on('ticket.created', value => {
+      const parsed = DemoTicketSchema.safeParse(value);
+      if (parsed.success) setTicket(parsed.data);
+    });
+    socket.on('notification.updated', envelope => {
+      if (typeof envelope?.payload?.body === 'string') setNotification(envelope.payload.body);
+    });
     const lifecycle = AppState.addEventListener('change', next => {
       if (next === 'active') { if (socket.connected) resync(); else socket.connect(); }
       else { socket.disconnect(); stale(); }
@@ -57,5 +71,5 @@ export function useLiveFeed(baseUrl: string, ownerId: string) {
     const retry = setInterval(() => { if (socket.connected && AppState.currentState === 'active') resync(); }, 15000);
     return () => { disposed = true; generation++; clearInterval(retry); if (batch) clearTimeout(batch); lifecycle.remove(); socket.removeAllListeners(); socket.disconnect(); };
   }, [baseUrl, ownerId]);
-  return { snapshots, status };
+  return { snapshots, status, wallet, ticket, notification };
 }

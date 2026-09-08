@@ -7,6 +7,7 @@ import { DEMO_TICKET_MODEL } from '../persistence/models.js';
 import { EventDetailService } from '../event-detail/event-detail.service.js';
 import { SlipsService } from '../slips/slips.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
+import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 
 type StoredTicket = DemoTicket & { idempotencyKey: string };
 
@@ -18,6 +19,7 @@ export class TicketPlacementService {
     @Inject(EventDetailService) private readonly details: EventDetailService,
     @Inject(WalletService) private readonly wallets: WalletService,
     @Optional() @InjectModel(DEMO_TICKET_MODEL) private readonly ticketModel?: Model<StoredTicket>,
+    @Optional() @Inject(RealtimeGateway) private readonly realtime?: RealtimeGateway,
   ) {}
 
   async list(ownerId: string): Promise<DemoTicket[]> {
@@ -71,6 +73,9 @@ export class TicketPlacementService {
     } else await execute();
     if (!ticket) throw new BadRequestException('Ticket transaction failed.');
     await this.slips.clear(parsed.data.ownerId, parsed.data.tab, { expectedVersion: slip.version });
+    this.realtime?.publishTicket(ticket);
+    this.realtime?.publishWallet(await this.wallets.get(actor));
+    this.realtime?.publishNotification(actor, { id: `notification-${ticket.id}`, title: 'Demo ticket confirmed', body: `${ticket.code ?? ticket.id} is now open.` });
     return ticket;
   }
 

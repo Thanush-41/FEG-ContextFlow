@@ -31,7 +31,25 @@ describe('Sprint 9 deterministic live simulation', () => {
     expect(replay.event.markets).toEqual(first.event.markets);
   });
 
+  it('seeds several sports and automatically finishes at the sport boundary', () => {
+    expect(new Set(simulator.list().map(item => item.event.sport))).toEqual(new Set(['Football', 'Basketball', 'Tennis']));
+    simulator.control('event-cibona-zadar', { action: 'reset', seed: 12 });
+    simulator.control('event-cibona-zadar', { action: 'step', seconds: 600 });
+    const finished = simulator.control('event-cibona-zadar', { action: 'step', seconds: 120 });
+    expect(finished.event.status).toBe('finished');
+    expect(finished.period).toBe('FT');
+    expect(finished.running).toBe(false);
+    expect(finished.incidents.at(-1)?.type).toBe('finished');
+  });
+
+  it('bounds incident history during repeated controls', () => {
+    simulator.control(eventId, { action: 'reset' });
+    for (let index = 0; index < 60; index += 1) simulator.control(eventId, { action: 'score', team: index % 2 ? 'home' : 'away' });
+    expect(simulator.get(eventId)?.incidents).toHaveLength(50);
+  });
+
   it('protects and drives score, price, suspension, pause, and completion controls', async () => {
+    simulator.control(eventId, { action: 'reset' });
     await request(app.getHttpServer()).post(`/api/admin/live/${eventId}/control`).send({ action: 'score', team: 'home' }).expect(401);
     const score = await request(app.getHttpServer()).post(`/api/admin/live/${eventId}/control`).set(admin).send({ action: 'score', team: 'home' }).expect(201);
     expect(score.body.event.score).toBe('2–1');
@@ -73,5 +91,25 @@ describe('Sprint 9 deterministic live simulation', () => {
     const snapshot = await recovered.emitWithAck('events.subscribe', { eventIds: [eventId] });
     expect(snapshot.snapshots[0].sequence).toBe(next.sequence);
     recovered.close();
+  });
+
+  it('delivers a live price update to concurrent subscribers within the local latency budget', async () => {
+    simulator.control(eventId, { action: 'reset', seed: 77 });
+    const clients = await Promise.all(Array.from({ length: 24 }, async (_, index) => {
+      const client: Socket = io(`${baseUrl}/realtime`, { transports: ['websocket'], auth: { token: `load-test-user-${String(index).padStart(3, '0')}` } });
+      await new Promise<void>((resolve, reject) => { client.once('connect', resolve); client.once('connect_error', reject); });
+      await client.emitWithAck('events.subscribe', { eventIds: [eventId] });
+      return client;
+    }));
+    const startedAt = performance.now();
+    const deliveries = clients.map(client => new Promise<number>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Concurrent live update timeout.')), 1_000);
+      client.once('market.updated', () => { clearTimeout(timeout); resolve(performance.now() - startedAt); });
+    }));
+    simulator.control(eventId, { action: 'step', seconds: 15 });
+    const latencies = (await Promise.all(deliveries)).sort((left, right) => left - right);
+    const p95 = latencies[Math.ceil(latencies.length * 0.95) - 1]!;
+    clients.forEach(client => client.close());
+    expect(p95).toBeLessThanOrEqual(500);
   });
 });

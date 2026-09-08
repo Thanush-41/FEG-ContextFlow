@@ -4,8 +4,8 @@
 
 import React from 'react';
 import ReactTestRenderer, { ReactTestInstance } from 'react-test-renderer';
-import App from '../App';
-jest.mock('../useLiveFeed', () => ({ useLiveFeed: () => ({ snapshots: {}, status: 'stale' }) }));
+import App, { LiveScreen } from '../App';
+jest.mock('../useLiveFeed', () => ({ useLiveFeed: () => ({ snapshots: {}, status: 'stale', wallet: null, ticket: null, notification: null }) }));
 
 jest.mock(
   'react-native-safe-area-context',
@@ -190,4 +190,19 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
     byTestId('tab-menu').props.onPress(),
   );
   expect(byTestId('menu-screen')).toBeTruthy();
+});
+
+test('filters the live board across football, basketball, and tennis', async () => {
+  const events = [
+    { id: 'football', label: 'LIVE', league: 'CROATIA · HNL', starts: "23' · 1–0", home: 'Dinamo', away: 'Hajduk', markets: [{ label: '1', value: '1.80', state: 'active' }], features: [], totalMarketCount: 1 },
+    { id: 'basketball', label: 'LIVE', league: 'ABA LEAGUE', starts: 'Q2 · 31–28', home: 'Cibona', away: 'Zadar', markets: [{ label: '1', value: '1.65', state: 'active' }], features: [], totalMarketCount: 1 },
+    { id: 'tennis', label: 'LIVE', league: 'WTA ZAGREB', starts: 'SET 2 · 3–2', home: 'Martic', away: 'Vekic', markets: [{ label: '1', value: '2.10', state: 'active' }], features: [], totalMarketCount: 1 },
+  ] as any;
+  let renderer: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<LiveScreen events={events} selectedOdds={new Set()} onSelect={jest.fn()} onOpen={jest.fn()} />); });
+  const basketball = renderer!.root.findByProps({ testID: 'live-filter-basketball' });
+  await ReactTestRenderer.act(async () => basketball.props.onPress());
+  expect(renderer!.root.findByProps({ children: 'Cibona' })).toBeTruthy();
+  expect(renderer!.root.findAllByProps({ children: 'Dinamo' })).toHaveLength(0);
+  expect(renderer!.root.findByProps({ testID: 'live-event-count' }).props.children).toEqual([1, ' EVENTS']);
 });

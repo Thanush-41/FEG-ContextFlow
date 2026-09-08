@@ -17,6 +17,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   server!: Server;
   private unsubscribe?: () => void;
   private readonly subscriptionWindows = new Map<string, { startedAt: number; count: number }>();
+  private readonly userSequences = new Map<string, number>();
   constructor(@Inject(LiveSimulationService) private readonly simulator: LiveSimulationService) {}
 
   afterInit(server: Server) {
@@ -61,7 +62,9 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     else this.server?.emit('ticket.created', ticket);
   }
 
-  publishWallet(wallet: Wallet) { this.server?.to(`user:${wallet.userId}`).emit('wallet.updated', this.envelope('wallet', wallet, 1)); }
+  publishWallet(wallet: Wallet) { const sequence = this.nextUserSequence(wallet.userId); this.server?.to(`user:${wallet.userId}`).emit('wallet.updated', this.envelope('wallet', wallet, sequence, undefined, sequence)); }
+  publishNotification(userId: string, payload: { id: string; title: string; body: string }) { const sequence = this.nextUserSequence(userId); this.server?.to(`user:${userId}`).emit('notification.updated', this.envelope('notification', payload, sequence, undefined, sequence)); }
   private publishLive(channel: 'event' | 'score' | 'market' | 'incident', snapshot: LiveEventSnapshot) { this.server?.to(`event:${snapshot.eventId}`).emit(`${channel}.updated`, this.envelope(channel, snapshot, snapshot.version, snapshot.eventId, snapshot.sequence)); }
   private envelope(channel: LiveUpdateEnvelope['channel'], payload: unknown, version: number, eventId?: string, sequence = 0): LiveUpdateEnvelope { return { channel, ...(eventId ? { eventId } : {}), sequence, version, emittedAt: new Date().toISOString(), payload }; }
+  private nextUserSequence(userId: string) { const next = (this.userSequences.get(userId) ?? 0) + 1; this.userSequences.set(userId, next); return next; }
 }

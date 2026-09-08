@@ -49,7 +49,10 @@ export class EventDetailService {
     const event = await this.sports.get(eventId);
     const all = await this.sports.list();
     const marketStatus: DetailedMarket['status'] = event.status === 'finished' ? 'settled' : event.status === 'scheduled' || event.status === 'live' ? 'open' : 'suspended';
-    const markets = this.markets(eventId, marketStatus, event.sport);
+    const generated = this.markets(eventId, marketStatus, event.sport);
+    const markets = event.status === 'live' && event.markets.length
+      ? [this.liveMarket(event), ...generated.filter(market => market.group !== 'main')]
+      : generated;
     const score = event.score?.split(/[–-]/).map(value => Number(value.trim())) ?? [];
     const homeScore = score[0];
     const awayScore = score[1];
@@ -96,6 +99,22 @@ export class EventDetailService {
         return { id: `${eventId}-outcome-${marketIndex}-${outcomeIndex}`, label, odds, state: status === 'open' ? 'active' : 'locked', features: [], compatibilityGroup: `${eventId}-group-${marketIndex}`, priceHistory: [{ odds: Number((odds + 0.08).toFixed(2)), recordedAt: new Date(Date.now() - 300_000).toISOString() }, { odds, recordedAt: new Date().toISOString() }] };
       }),
     }));
+  }
+
+  private liveMarket(event: import('@feg/contracts').SportsEvent): DetailedMarket {
+    const market = event.markets[0]!;
+    return {
+      id: market.id, group: 'main', name: market.name,
+      layout: market.selections.length === 3 ? 'threeWay' : 'twoWay', status: 'open',
+      outcomes: market.selections.map(selection => ({
+        id: selection.id, label: selection.label, odds: selection.odds, state: selection.state,
+        features: selection.features, compatibilityGroup: `${event.id}-${market.id}`,
+        priceHistory: [
+          ...(selection.previousOdds ? [{ odds: selection.previousOdds, recordedAt: new Date(Date.now() - 5_000).toISOString() }] : []),
+          { odds: selection.odds, recordedAt: new Date().toISOString() },
+        ],
+      })),
+    };
   }
 
   private lineup(team: string) { return Array.from({ length: 11 }, (_, index) => `${team} Player ${index + 1}`); }

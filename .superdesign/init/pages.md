@@ -11,4 +11,8 @@ Entry: `apps/mobile/App.tsx`
 - `NativeModules.CounterLiveActivityModule` for persisted word count, speech,
   notifications, Home Screen widget and Dynamic Island/Live Activity updates
 
-The screen uses local demo sports data while domain API modules are implemented.
+Bottom-tab state renders Sport, Live, Tickets, Casino and Menu views; selecting
+an event opens its detail markets, while choosing odds opens the sticky slip.
+The screen loads sports data and submits demo bets through
+`packages/api-client`; the corresponding endpoints are implemented in
+`apps/api`, with offline fixtures retained for resilient demos.

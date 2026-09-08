@@ -4,6 +4,8 @@ import {
   ScrollView, StatusBar, StyleSheet, Text, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ContextFlowClient } from '@feg/api-client';
+import type { SportsEvent } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -21,15 +23,43 @@ type VoiceProgress = { transcript: string; wordCount: number; isFinal: boolean; 
 type Event = {
   id: string; label: string; league: string; starts: string;
   home: string; away: string; markets: readonly [string, string, string];
+  apiEventId?: string; apiMarketId?: string; apiSelectionIds?: readonly string[];
 };
+type Tab = 'Live' | 'Sport' | 'Tickets' | 'Casino' | 'Menu';
 
-const events: Event[] = [
+const fallbackEvents: Event[] = [
   { id: 'chelsea-liverpool', label: 'BET BUILDER', league: 'ENGLAND · PREMIER LEAGUE', starts: 'STARTS IN 2H', home: 'Chelsea', away: 'Liverpool', markets: ['2.25', '3.40', '2.40'] },
   { id: 'betis-madrid', label: 'POPULAR', league: 'SPAIN · LA LIGA', starts: 'TOMORROW 00:30', home: 'Real Betis', away: 'Real Madrid', markets: ['4.60', '3.85', '1.68'] },
   { id: 'inter-milan', label: 'TOP MATCH', league: 'ITALY · SERIE A', starts: 'TOMORROW 02:15', home: 'Inter', away: 'AC Milan', markets: ['2.05', '3.25', '3.10'] },
 ];
 
 const liveActivity = NativeModules.CounterLiveActivityModule as CounterLiveActivityModule | undefined;
+
+function apiBaseUrl() {
+  const scriptUrl = (NativeModules.SourceCode as { scriptURL?: string } | undefined)?.scriptURL;
+  const host = scriptUrl?.match(/^https?:\/\/([^/:]+)/)?.[1];
+  if (host) return `http://${host}:3000`;
+  return Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+}
+
+const api = new ContextFlowClient(apiBaseUrl(), async () => undefined);
+
+function toUiEvent(event: SportsEvent): Event {
+  const market = event.markets[0];
+  const odds = market?.selections.map(selection => selection.odds.toFixed(2)) ?? [];
+  return {
+    id: event.id.replace(/^event-/, ''),
+    label: event.status === 'live' ? `● LIVE  ${event.clock ?? ''}` : 'BET BUILDER',
+    league: event.league.toUpperCase(),
+    starts: event.status === 'live' ? event.score ?? 'LIVE' : 'STARTS SOON',
+    home: event.home,
+    away: event.away,
+    markets: [odds[0] ?? '–', odds[1] ?? '–', odds[2] ?? '–'],
+    apiEventId: event.id,
+    apiMarketId: market?.id,
+    apiSelectionIds: market?.selections.map(selection => selection.id),
+  };
+}
 
 function App() {
   const [count, setCount] = useState(0);
@@ -40,10 +70,27 @@ function App() {
   const [showVoice, setShowVoice] = useState(false);
   const [activePeriod, setActivePeriod] = useState('TODAY');
   const [selectedOdd, setSelectedOdd] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('Sport');
+  const [detailEvent, setDetailEvent] = useState<Event | null>(null);
+  const [offerEvents, setOfferEvents] = useState(fallbackEvents);
+  const [liveEvents, setLiveEvents] = useState<Event[]>([]);
+  const [ticketId, setTicketId] = useState<string | null>(null);
+  const [isPlacingBet, setIsPlacingBet] = useState(false);
   const countRef = useRef(count);
   const voiceBaseCountRef = useRef(count);
 
   useEffect(() => { countRef.current = count; }, [count]);
+
+  useEffect(() => {
+    Promise.all([api.getEvents('scheduled'), api.getEvents('live')])
+      .then(([scheduled, live]) => {
+        if (scheduled.length) setOfferEvents(scheduled.map(toUiEvent));
+        setLiveEvents(live.map(toUiEvent));
+      })
+      .catch(() => {
+        // Deterministic fixtures keep the demo usable while the local API starts.
+      });
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !liveActivity) { setIsCountLoaded(true); return; }
@@ -135,13 +182,40 @@ function App() {
     catch (error) { Alert.alert('Notification', error instanceof Error ? error.message : 'Unable to send notification.'); }
   };
 
+  const placeDemoBet = async () => {
+    if (!selectedOdd) return;
+    const separator = selectedOdd.lastIndexOf('-');
+    const eventId = selectedOdd.slice(0, separator);
+    const selectionIndex = Number(selectedOdd.slice(separator + 1));
+    const event = [...offerEvents, ...liveEvents].find(item => item.id === eventId);
+    const selectionId = event?.apiSelectionIds?.[selectionIndex];
+    const acceptedOdds = Number(event?.markets[selectionIndex]);
+    if (!event?.apiEventId || !event.apiMarketId || !selectionId || !acceptedOdds) {
+      Alert.alert('Demo bet', 'Wait for the live offer to finish loading, then select again.');
+      return;
+    }
+    setIsPlacingBet(true);
+    try {
+      const ticket = await api.placeDemoBet({
+        idempotencyKey: 'f37970b1-1127-45b1-ab01-301f09772f0b',
+        stake: { currency: 'DCO', minorUnits: 100 },
+        selections: [{ eventId: event.apiEventId, marketId: event.apiMarketId, selectionId, acceptedOdds }],
+      });
+      setTicketId(ticket.id);
+    } catch (error) {
+      Alert.alert('Demo bet', error instanceof Error ? error.message : 'Unable to place demo bet.');
+    } finally {
+      setIsPlacingBet(false);
+    }
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView edges={['top']} style={styles.screen}>
         <StatusBar barStyle="light-content" />
         <Header count={count} onVoice={() => setShowVoice(value => !value)} />
-        <NativePrompt />
-        <PeriodTabs active={activePeriod} onChange={setActivePeriod} />
+        {activeTab === 'Sport' && <NativePrompt />}
+        {(activeTab === 'Sport' || activeTab === 'Live') && <PeriodTabs active={activePeriod} onChange={setActivePeriod} />}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {showVoice && <VoicePanel
             count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
@@ -149,7 +223,7 @@ function App() {
             onReset={() => setCount(0)} onToggleActivity={toggleLiveActivity}
             onToggleVoice={toggleVoiceInput} onNotify={sendNotification}
           />}
-          <View style={styles.hero}>
+          {activeTab === 'Sport' && !detailEvent && <><View style={styles.hero}>
             <View style={styles.heroCopy}>
               <Text style={styles.heroKicker}>FEG CONTEXTFLOW</Text>
               <Text style={styles.heroTitle}>Speak. Pick. Confirm.</Text>
@@ -162,13 +236,18 @@ function App() {
             <Text style={styles.filterTitle}>TOP OFFER</Text>
             <Pressable style={styles.filterButton}><Text style={styles.filterButtonText}>☷  FILTER</Text></Pressable>
           </View>
-          {events.map(event => <EventCard event={event} key={event.id} selectedOdd={selectedOdd} onSelect={setSelectedOdd} />)}
+          {offerEvents.map(event => <EventCard event={event} key={event.id} selectedOdd={selectedOdd} onSelect={setSelectedOdd} onOpen={() => setDetailEvent(event)} />)}</>}
+          {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} selectedOdd={selectedOdd} onBack={() => setDetailEvent(null)} onSelect={setSelectedOdd} />}
+          {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdd={selectedOdd} onSelect={setSelectedOdd} />}
+          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(selectedOdd)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
+          {activeTab === 'Casino' && <CasinoScreen />}
+          {activeTab === 'Menu' && <MenuScreen />}
         </ScrollView>
         {selectedOdd && <View style={styles.betBar}>
           <View><Text style={styles.betBarLabel}>BET SLIP · 1 PICK</Text><Text style={styles.betBarOdds}>Selection ready</Text></View>
-          <Pressable style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>OPEN</Text></Pressable>
+          <Pressable onPress={() => setActiveTab('Tickets')} style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>OPEN</Text></Pressable>
         </View>}
-        <BottomNavigation />
+        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); }} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -207,12 +286,12 @@ function QuickLinks() {
     <Pressable key={label} style={styles.quickLink}><Text style={styles.quickIcon}>{icon}</Text><Text style={styles.quickLabel}>{label}</Text></Pressable>)}</View>;
 }
 
-function EventCard({ event, selectedOdd, onSelect }: { event: Event; selectedOdd: string | null; onSelect: (value: string | null) => void }) {
+function EventCard({ event, selectedOdd, onSelect, onOpen }: { event: Event; selectedOdd: string | null; onSelect: (value: string | null) => void; onOpen?: () => void }) {
   const labels = ['1', 'X', '2'];
   return <View style={styles.eventCard} testID={`event-${event.id}`}>
     <View style={styles.eventTopline}><Text style={styles.eventBadge}>{event.label}</Text><Text style={styles.eventStarts}>{event.starts}</Text></View>
     <View style={styles.leagueRow}><Text style={styles.league}>{event.league}</Text><Text style={styles.chevron}>⌄</Text></View>
-    <View style={styles.teams}><Text style={styles.team}>{event.home}</Text><Text style={styles.team}>{event.away}</Text></View>
+    <Pressable onPress={onOpen} style={styles.teams}><Text style={styles.team}>{event.home}</Text><Text style={styles.team}>{event.away}</Text></Pressable>
     <View style={styles.marketMeta}><Text style={styles.marketName}>MATCH RESULT</Text><Text style={styles.moreMarkets}>+38 markets</Text></View>
     <View style={styles.oddsRow}>{event.markets.map((odd, index) => {
       const key = `${event.id}-${index}`;
@@ -253,10 +332,62 @@ function VoicePanel(props: VoicePanelProps) {
   </View>;
 }
 
-function BottomNavigation() {
+function EventDetail({ event, selectedOdd, onBack, onSelect }: { event: Event; selectedOdd: string | null; onBack: () => void; onSelect: (value: string | null) => void }) {
+  return <View testID="event-detail-screen">
+    <Pressable onPress={onBack} style={styles.screenHeading}><Text style={styles.backText}>‹</Text><Text style={styles.screenTitle}>EVENT DETAILS</Text></Pressable>
+    <View style={styles.scoreboard}><Text style={styles.scoreMeta}>{event.league}</Text><Text style={styles.scoreTeams}>{event.home}  vs  {event.away}</Text><Text style={styles.scoreTime}>{event.starts}</Text></View>
+    <Text style={styles.groupHeading}>MAIN MARKETS</Text>
+    <EventCard event={event} selectedOdd={selectedOdd} onSelect={onSelect} />
+    <Text style={styles.groupHeading}>GOALS</Text>
+    <View style={styles.marketPlaceholder}><Text style={styles.marketPlaceholderText}>Over 2.5</Text><Text style={styles.marketPlaceholderOdd}>1.84</Text></View>
+    <View style={styles.marketPlaceholder}><Text style={styles.marketPlaceholderText}>Under 2.5</Text><Text style={styles.marketPlaceholderOdd}>1.96</Text></View>
+  </View>;
+}
+
+function LiveScreen({ events: liveEvents, selectedOdd, onSelect }: { events: Event[]; selectedOdd: string | null; onSelect: (value: string | null) => void }) {
+  const liveEvent: Event = liveEvents[0] ?? { id: 'dinamo-hajduk', label: '● LIVE  67\'', league: 'CROATIA · HNL', starts: '1 – 1', home: 'Dinamo Zagreb', away: 'Hajduk Split', markets: ['2.05', '2.80', '4.10'] };
+  return <View testID="live-screen">
+    <View style={styles.filters}><Text style={styles.filterTitle}>LIVE NOW</Text><Text style={styles.liveCount}>1 EVENT</Text></View>
+    <EventCard event={liveEvent} selectedOdd={selectedOdd} onSelect={onSelect} />
+    <View style={styles.infoCard}><Text style={styles.infoTitle}>Live updates</Text><Text style={styles.infoBody}>Scores, clocks and market availability update through the realtime channel.</Text></View>
+  </View>;
+}
+
+function TicketsScreen({ hasSelection, isPlacing, ticketId, onPlace }: { hasSelection: boolean; isPlacing: boolean; ticketId: string | null; onPlace: () => void }) {
+  return <View testID="tickets-screen">
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>TICKETS</Text><Text style={styles.sectionAction}>HISTORY</Text></View>
+    {hasSelection ? <View style={styles.ticketCard}>
+      <Text style={styles.ticketStatus}>{ticketId ? 'OPEN TICKET' : 'DRAFT · 1 SELECTION'}</Text><Text style={styles.ticketTitle}>{ticketId ? 'Demo bet accepted' : 'Your demo bet is ready'}</Text>
+      <View style={styles.stakeRow}><Text style={styles.stakeLabel}>STAKE</Text><Text style={styles.stakeValue}>1.00 DCO</Text></View>
+      {ticketId ? <Text style={styles.ticketId} numberOfLines={1}>{ticketId}</Text> : <Pressable onPress={onPlace} disabled={isPlacing} style={[styles.placeButton, isPlacing && styles.disabled]} testID="place-demo-bet-button"><Text style={styles.placeButtonText}>{isPlacing ? 'PLACING…' : 'PLACE DEMO BET'}</Text></Pressable>}
+    </View> : <EmptyState icon="▤" title="No tickets yet" body="Choose odds from Sport or Live to create your first demo ticket." />}
+  </View>;
+}
+
+function CasinoScreen() {
+  return <View testID="casino-screen">
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>CASINO</Text><Text style={styles.sectionAction}>FILTER</Text></View>
+    <View style={styles.casinoGrid}>{['Live tables', 'Jackpots', 'Crash', 'New games', 'Slots', 'Favourites'].map((title, index) =>
+      <View key={title} style={[styles.gameTile, index < 2 && styles.gameTileFeatured]}><Text style={styles.gameBadge}>{index < 2 ? 'HOT' : 'DEMO'}</Text><Text style={styles.gameTitle}>{title}</Text></View>)}</View>
+  </View>;
+}
+
+function MenuScreen() {
+  return <View testID="menu-screen">
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>MENU</Text></View>
+    {['Profile & demo wallet', 'Promotions', 'Community', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
+      <Pressable key={item} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+  </View>;
+}
+
+function EmptyState({ icon, title, body }: { icon: string; title: string; body: string }) {
+  return <View style={styles.emptyState}><Text style={styles.emptyIcon}>{icon}</Text><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyBody}>{body}</Text></View>;
+}
+
+function BottomNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   const tabs = [['●', 'Live'], ['▦', 'Sport'], ['▤', 'Tickets'], ['◎', 'Casino'], ['☰', 'Menu']];
   return <View style={styles.bottomNav}>{tabs.map(([icon, label]) =>
-    <Pressable key={label} style={styles.bottomTab}><Text style={[styles.bottomIcon, label === 'Sport' && styles.bottomActive]}>{icon}</Text><Text style={[styles.bottomLabel, label === 'Sport' && styles.bottomActive]}>{label}</Text></Pressable>)}</View>;
+    <Pressable key={label} onPress={() => onChange(label as Tab)} style={styles.bottomTab} testID={`tab-${label.toLowerCase()}`}><Text style={[styles.bottomIcon, label === active && styles.bottomActive]}>{icon}</Text><Text style={[styles.bottomLabel, label === active && styles.bottomActive]}>{label}</Text></Pressable>)}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -346,6 +477,42 @@ const styles = StyleSheet.create({
   bottomIcon: { color: '#98A1AD', fontSize: 17 },
   bottomLabel: { color: '#98A1AD', fontSize: 9, fontWeight: '600' },
   bottomActive: { color: '#4C9DFF' },
+  screenHeading: { minHeight: 52, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#252D39' },
+  backText: { color: '#70AFFF', fontSize: 28, marginRight: 10 },
+  screenTitle: { flex: 1, color: '#F4F6F9', fontSize: 13, fontWeight: '900' },
+  sectionAction: { color: '#70AFFF', fontSize: 9, fontWeight: '900' },
+  scoreboard: { margin: 10, padding: 18, backgroundColor: '#164B8D', alignItems: 'center' },
+  scoreMeta: { color: '#91C8FF', fontSize: 8, fontWeight: '900' },
+  scoreTeams: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', marginTop: 12 },
+  scoreTime: { color: '#D8E9FF', fontSize: 10, marginTop: 8 },
+  groupHeading: { color: '#9EA8B5', fontSize: 9, fontWeight: '900', marginHorizontal: 12, marginVertical: 9 },
+  marketPlaceholder: { height: 44, marginHorizontal: 10, marginBottom: 5, paddingHorizontal: 12, backgroundColor: '#222B37', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  marketPlaceholderText: { color: '#D8DEE6', fontSize: 11, fontWeight: '700' },
+  marketPlaceholderOdd: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  liveCount: { color: '#E33A43', fontSize: 9, fontWeight: '900' },
+  infoCard: { margin: 10, padding: 14, borderLeftWidth: 3, borderLeftColor: '#1264C5', backgroundColor: '#151D28' },
+  infoTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  infoBody: { color: '#929DAB', fontSize: 10, lineHeight: 15, marginTop: 5 },
+  ticketCard: { margin: 10, padding: 14, backgroundColor: '#151D28', borderWidth: 1, borderColor: '#303A47' },
+  ticketStatus: { color: '#70AFFF', fontSize: 8, fontWeight: '900' },
+  ticketTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginTop: 9 },
+  stakeRow: { marginTop: 18, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#303A47', flexDirection: 'row', justifyContent: 'space-between' },
+  stakeLabel: { color: '#8F9AA8', fontSize: 9, fontWeight: '800' },
+  stakeValue: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  placeButton: { height: 42, backgroundColor: '#20A20E', alignItems: 'center', justifyContent: 'center' },
+  placeButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  ticketId: { color: '#75B5FF', fontSize: 9, marginTop: 8 },
+  casinoGrid: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  gameTile: { width: '48.9%', height: 118, padding: 10, backgroundColor: '#232B36', justifyContent: 'space-between' },
+  gameTileFeatured: { backgroundColor: '#164B8D' },
+  gameBadge: { alignSelf: 'flex-start', color: '#FFFFFF', fontSize: 7, fontWeight: '900', backgroundColor: '#D92532', paddingHorizontal: 5, paddingVertical: 3 },
+  gameTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  menuRow: { height: 54, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  menuText: { color: '#E8ECF1', fontSize: 12, fontWeight: '700' },
+  emptyState: { margin: 22, paddingVertical: 54, alignItems: 'center' },
+  emptyIcon: { color: '#398DEB', fontSize: 36 },
+  emptyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 14 },
+  emptyBody: { maxWidth: 270, color: '#8995A3', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 7 },
 });
 
 export default App;

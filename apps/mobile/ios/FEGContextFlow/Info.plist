@@ -46,6 +46,8 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FEG ContextFlow uses the microphone to count the words you speak.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>FEG ContextFlow connects to the local development API while testing on your iPhone.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>FEG ContextFlow converts your speech into a word count.</string>
 	<key>NSSupportsLiveActivities</key>

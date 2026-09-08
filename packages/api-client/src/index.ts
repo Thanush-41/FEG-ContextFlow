@@ -1,4 +1,9 @@
-import { ApiErrorSchema, type ApiError } from '@feg/contracts';
+import {
+  type ApiError,
+  type DemoTicket,
+  type PlaceDemoBet,
+  type SportsEvent,
+} from '@feg/contracts';
 
 export class ContextFlowClient {
   constructor(
@@ -7,19 +12,56 @@ export class ContextFlowClient {
   ) {}
 
   async get<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'GET' });
+  }
+
+  async post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  getEvents(status?: 'scheduled' | 'live'): Promise<SportsEvent[]> {
+    return this.get(`/api/sports/events${status ? `?status=${status}` : ''}`);
+  }
+
+  getEvent(eventId: string): Promise<SportsEvent> {
+    return this.get(`/api/sports/events/${eventId}`);
+  }
+
+  placeDemoBet(input: PlaceDemoBet): Promise<DemoTicket> {
+    return this.post('/api/bets', input);
+  }
+
+  getTickets(): Promise<DemoTicket[]> {
+    return this.get('/api/bets');
+  }
+
+  private async request<T>(path: string, init: RequestInit): Promise<T> {
     const token = await this.getAccessToken();
-    const headers = token ? { authorization: `Bearer ${token}` } : {};
-    const response = await fetch(new URL(path, this.baseUrl), { headers });
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (token) headers.authorization = `Bearer ${token}`;
+    const response = await fetch(new URL(path, this.baseUrl), { ...init, headers });
     if (!response.ok) {
-      const parsed = ApiErrorSchema.safeParse(await response.json());
+      const candidate: unknown = await response.json();
       throw new ContextFlowApiError(
-        parsed.success
-          ? parsed.data
+        isApiError(candidate)
+          ? candidate
           : { error: { code: 'INVALID_ERROR_RESPONSE', message: 'Request failed.' } },
       );
     }
     return (await response.json()) as T;
   }
+}
+
+function isApiError(candidate: unknown): candidate is ApiError {
+  if (!candidate || typeof candidate !== 'object' || !('error' in candidate)) return false;
+  const error = candidate.error;
+  return Boolean(
+    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' &&
+    'message' in error && typeof error.message === 'string',
+  );
 }
 
 export class ContextFlowApiError extends Error {

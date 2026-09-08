@@ -7,7 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
 import { useLiveFeed } from './useLiveFeed';
-import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, DemoProfile, DemoSession, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, ContentArticle, ContentKind, DemoProfile, DemoSession, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, Promotion, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -97,6 +97,9 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profile, setProfile] = useState<DemoProfile | null>(null);
   const [sessions, setSessions] = useState<DemoSession[]>([]);
+  const [discoveryOpen, setDiscoveryOpen] = useState<'promotions' | ContentKind | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [content, setContent] = useState<ContentArticle[]>([]);
   const [slip, setSlip] = useState<BetSlip | null>(null);
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
@@ -377,6 +380,12 @@ function App() {
     finally { setCasinoBusy(false); }
   };
 
+  const openDiscovery = async (route: 'promotions' | ContentKind) => {
+    setDiscoveryOpen(route);
+    try { route === 'promotions' ? setPromotions(await api.getPromotions()) : setContent(await api.getContent(route)); }
+    catch (error) { Alert.alert('Explore', error instanceof Error ? error.message : 'Unable to load this section.'); }
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView edges={['top']} style={styles.screen}>
@@ -402,7 +411,7 @@ function App() {
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
           {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
-          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} />)}
+          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : discoveryOpen ? <DiscoveryScreen route={discoveryOpen} promotions={promotions} content={content} onBack={() => setDiscoveryOpen(null)} onOptIn={async promotionId => { const updated = await api.optInPromotion(promotionId); setPromotions(current => current.map(item => item.id === updated.id ? updated : item)); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} onDiscovery={openDiscovery} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
           onMode={async mode => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, mode, ...(mode === 'system' ? { systemSize: Math.max(1, slip.selections.length - 1) } : {}) })); }}
@@ -410,7 +419,7 @@ function App() {
           onRemove={async selectionId => { if (slip) setSlip(await api.removeSlipSelection(slipOwnerId, slipTab, selectionId, slip.version)); }}
           onAccept={async () => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, acceptOddsChanges: true })); }}
           onClear={async () => { if (slip) setSlip(await api.clearSlip(slipOwnerId, slipTab, slip.version)); }} onPlace={() => { setActiveTab('Tickets'); setSlipView('compact'); }} />
-        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); if (tab !== 'Menu') { setProfileOpen(false); setWalletOpen(false); } }} />
+        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); if (tab !== 'Menu') { setProfileOpen(false); setWalletOpen(false); setDiscoveryOpen(null); } }} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -719,11 +728,22 @@ function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { ga
   </View>;
 }
 
-function MenuScreen({ onProfile }: { onProfile: () => void }) {
+function MenuScreen({ onProfile, onDiscovery }: { onProfile: () => void; onDiscovery: (route: 'promotions' | ContentKind) => void }) {
+  const routes: Record<string, 'promotions' | ContentKind | undefined> = { Promotions: 'promotions', News: 'news', 'Help centre': 'help', 'Responsible play': 'responsible_play' };
   return <View testID="menu-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>MENU</Text></View>
     {['Profile & demo wallet', 'Promotions', 'Community', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
-      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-profile-button' : undefined} onPress={item === 'Profile & demo wallet' ? onProfile : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-profile-button' : routes[item] ? `open-${routes[item]}-button` : undefined} onPress={item === 'Profile & demo wallet' ? onProfile : routes[item] ? () => onDiscovery(routes[item]!) : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+  </View>;
+}
+
+function DiscoveryScreen({ route, promotions, content, onBack, onOptIn }: { route: 'promotions' | ContentKind; promotions: Promotion[]; content: ContentArticle[]; onBack: () => void; onOptIn: (promotionId: string) => Promise<void> }) {
+  const [article, setArticle] = useState<ContentArticle | null>(null);
+  const title = route === 'promotions' ? 'PROMOTIONS' : route === 'responsible_play' ? 'RESPONSIBLE PLAY' : route === 'help' ? 'HELP CENTRE' : route.toUpperCase();
+  if (article) return <View testID="article-screen"><View style={styles.screenHeading}><Pressable testID="article-back" onPress={() => setArticle(null)}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>{article.kind.replace('_', ' ').toUpperCase()}</Text></View><View style={styles.articleCard}><Text style={styles.discoveryTitle}>{article.title}</Text><Text style={styles.discoverySummary}>{article.summary}</Text>{article.body.map(paragraph => <Text key={paragraph} style={styles.infoBody}>{paragraph}</Text>)}</View></View>;
+  return <View testID="discovery-screen"><View style={styles.screenHeading}><Pressable testID="discovery-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>{title}</Text><Text style={styles.ticketStatus}>{route === 'promotions' ? 'DEMO ONLY' : 'FEG GUIDE'}</Text></View>
+    {route === 'promotions' ? promotions.map(item => <View key={item.id} testID={`promotion-${item.id}`} style={styles.discoveryCard}><View style={styles.gameTileTop}><Text style={styles.gameBadge}>{item.rewardLabel}</Text><Text style={styles.ticketStatus}>{item.optedIn ? 'JOINED' : 'ELIGIBLE'}</Text></View><Text style={styles.discoveryTitle}>{item.title}</Text><Text style={styles.discoverySummary}>{item.summary}</Text>{item.terms.map(term => <Text key={term} style={styles.infoBody}>• {term}</Text>)}<Pressable testID={`opt-in-${item.id}`} disabled={item.optedIn || !item.eligible} onPress={() => onOptIn(item.id)} style={[styles.secondaryButton, (item.optedIn || !item.eligible) && styles.disabled]}><Text style={styles.secondaryButtonText}>{item.optedIn ? 'JOINED' : 'JOIN DEMO OFFER'}</Text></Pressable></View>) : content.map(item => <Pressable key={item.id} testID={`article-${item.id}`} onPress={() => setArticle(item)} style={styles.discoveryCard}><Text style={styles.gameBadge}>{item.kind.replace('_', ' ').toUpperCase()}</Text><Text style={styles.discoveryTitle}>{item.title}</Text><Text style={styles.discoverySummary}>{item.summary}</Text><Text style={styles.linkText}>READ ARTICLE  ›</Text></Pressable>)}
+    {route === 'promotions' ? !promotions.length && <OfferSkeleton /> : !content.length && <OfferSkeleton />}
   </View>;
 }
 
@@ -1027,6 +1047,11 @@ const styles = StyleSheet.create({
   profileCard: { margin: 10, padding: 12, backgroundColor: '#151D28', gap: 8 },
   settingValue: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   sessionRow: { minHeight: 58, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  discoveryCard: { marginHorizontal: 10, marginTop: 10, padding: 14, backgroundColor: '#151D28', borderWidth: 1, borderColor: '#263244', gap: 8 },
+  articleCard: { margin: 10, padding: 18, backgroundColor: '#151D28', gap: 14, borderLeftWidth: 3, borderLeftColor: '#398DEB' },
+  discoveryTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  discoverySummary: { color: '#AFBAC7', fontSize: 12, lineHeight: 18 },
+  linkText: { color: '#6EAFFF', fontSize: 10, fontWeight: '900' },
   emptyState: { margin: 22, paddingVertical: 54, alignItems: 'center' },
   emptyIcon: { color: '#398DEB', fontSize: 36 },
   emptyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 14 },

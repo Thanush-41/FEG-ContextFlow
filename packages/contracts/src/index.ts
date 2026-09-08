@@ -408,6 +408,31 @@ export const DemoSessionSchema = z.object({
 });
 export type DemoSession = z.infer<typeof DemoSessionSchema>;
 
+export const PromotionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  rewardLabel: z.string().min(1),
+  terms: z.array(z.string().min(1)).min(1),
+  eligible: z.boolean(),
+  optedIn: z.boolean(),
+  expiresAt: z.string().datetime(),
+  demoOnly: z.literal(true),
+});
+export type Promotion = z.infer<typeof PromotionSchema>;
+
+export const ContentKindSchema = z.enum(['news', 'guide', 'help', 'responsible_play']);
+export type ContentKind = z.infer<typeof ContentKindSchema>;
+export const ContentArticleSchema = z.object({
+  id: z.string().min(1),
+  kind: ContentKindSchema,
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  body: z.array(z.string().min(1)).min(1),
+  publishedAt: z.string().datetime(),
+});
+export type ContentArticle = z.infer<typeof ContentArticleSchema>;
+
 export const CreateDemoSessionSchema = z.object({ deviceName: z.string().min(2).max(80) });
 
 export const VoiceSessionStateSchema = z.enum([

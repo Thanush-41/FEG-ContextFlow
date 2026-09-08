@@ -7,6 +7,9 @@ import {
   type DemoProfile,
   type DemoSession,
   type DemoTicket,
+  type Promotion,
+  type ContentArticle,
+  type ContentKind,
   type PlaceDemoBet,
   type OfferResponse,
   type OfferTimeFilter,
@@ -156,6 +159,22 @@ export class ContextFlowClient {
 
   revokeDemoSession(userId: string, sessionId: string): Promise<DemoSession> {
     return this.request(`/api/account/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+  }
+
+  getPromotions(): Promise<Promotion[]> {
+    return this.get('/api/discovery/promotions');
+  }
+
+  optInPromotion(promotionId: string): Promise<Promotion> {
+    return this.post(`/api/discovery/promotions/${encodeURIComponent(promotionId)}/opt-in`, {});
+  }
+
+  getContent(kind?: ContentKind): Promise<ContentArticle[]> {
+    return this.get(`/api/content${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`);
+  }
+
+  getContentArticle(articleId: string): Promise<ContentArticle> {
+    return this.get(`/api/content/${encodeURIComponent(articleId)}`);
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

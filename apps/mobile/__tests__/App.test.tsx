@@ -22,6 +22,7 @@ jest.mock('@feg/api-client', () => ({
     let slip = { id: 'slip-guest-device-0001-1', ownerId: 'guest-device-0001', tab: 1, version: 0, mode: 'accumulator', stake: { currency: 'DCO', minorUnits: 100 }, selections: [] as any[], totals: null as any, warnings: [] as any[], updatedAt: '2026-09-08T12:00:00.000Z' };
     let placedTickets: any[] = [];
     let profile = { userId: 'guest-device-0001', displayName: 'Demo Player', locale: 'en', oddsFormat: 'decimal', theme: 'dark', notificationsEnabled: true, transcriptStorageEnabled: false, sessionReminderMinutes: 60, maxDemoStakeMinorUnits: 10000, createdAt: '2026-09-08T12:00:00.000Z', updatedAt: '2026-09-08T12:00:00.000Z' };
+    let promotions = [{ id: 'promo-live-boost', title: 'Live Match Boost', summary: 'Explore one featured live market.', rewardLabel: 'DEMO BOOST', terms: ['Demo coins only.'], eligible: true, optedIn: false, expiresAt: '2027-01-31T23:59:59.000Z', demoOnly: true }];
     const withTotals = (next: typeof slip) => ({ ...next, totals: next.selections.length ? { lines: 1, totalOdds: next.selections.reduce((total, item) => total * item.currentOdds, 1), stakeMinorUnits: next.stake.minorUnits, grossReturnMinorUnits: 648, bonusMinorUnits: 0, feeMinorUnits: 0, taxMinorUnits: 0, potentialReturnMinorUnits: 648 } : null });
     return ({
     getEvents: jest.fn(() => Promise.resolve([])),
@@ -103,6 +104,10 @@ jest.mock('@feg/api-client', () => ({
     createDemoSession: jest.fn(() => Promise.resolve({ id: 'session-current-0001', userId: 'guest-device-0001', deviceName: 'iPhone / iOS', current: true, createdAt: '2026-09-08T12:00:00.000Z', lastSeenAt: '2026-09-08T12:00:00.000Z' })),
     getDemoSessions: jest.fn(() => Promise.resolve([{ id: 'session-current-0001', userId: 'guest-device-0001', deviceName: 'iPhone / iOS', current: true, createdAt: '2026-09-08T12:00:00.000Z', lastSeenAt: '2026-09-08T12:00:00.000Z' }])),
     revokeDemoSession: jest.fn(),
+    getPromotions: jest.fn(() => Promise.resolve(promotions)),
+    optInPromotion: jest.fn((promotionId: string) => { promotions = promotions.map(item => item.id === promotionId ? { ...item, optedIn: true } : item); return Promise.resolve(promotions[0]); }),
+    getContent: jest.fn((kind: string) => Promise.resolve([{ id: `${kind}-article`, kind, title: `${kind} title`, summary: `${kind} summary`, body: [`${kind} body`], publishedAt: '2026-09-09T00:00:00.000Z' }])),
+    getContentArticle: jest.fn(),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -228,6 +233,19 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   expect(byTestId('setting-notifications').findAllByProps({ children: 'OFF' }).length).toBeGreaterThan(0);
   await ReactTestRenderer.act(async () => byTestId('profile-wallet-button').props.onPress());
   expect(byTestId('wallet-screen')).toBeTruthy();
+
+  await ReactTestRenderer.act(async () => byTestId('tab-sport').props.onPress());
+  await ReactTestRenderer.act(async () => byTestId('tab-menu').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-promotions-button').props.onPress(); });
+  expect(byTestId('promotion-promo-live-boost')).toBeTruthy();
+  await ReactTestRenderer.act(async () => { await byTestId('opt-in-promo-live-boost').props.onPress(); });
+  expect(byTestId('promotion-promo-live-boost').findAllByProps({ children: 'JOINED' }).length).toBeGreaterThan(0);
+  await ReactTestRenderer.act(async () => byTestId('discovery-back').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-news-button').props.onPress(); });
+  expect(byTestId('article-news-article')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('article-news-article').props.onPress());
+  expect(byTestId('article-screen')).toBeTruthy();
+  expect(renderer!.root.findByProps({ children: 'news body' })).toBeTruthy();
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

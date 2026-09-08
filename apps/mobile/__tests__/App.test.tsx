@@ -80,7 +80,12 @@ jest.mock('@feg/api-client', () => ({
     removeSlipSelection: jest.fn((_ownerId: string, _tab: number, selectionId: string) => { slip = withTotals({ ...slip, version: slip.version + 1, selections: slip.selections.filter(item => item.selectionId !== selectionId) }); return Promise.resolve(slip); }),
     updateSlip: jest.fn((_ownerId: string, _tab: number, input: any) => { slip = withTotals({ ...slip, version: slip.version + 1, mode: input.mode ?? slip.mode, stake: input.stakeMinorUnits === undefined ? slip.stake : { currency: 'DCO', minorUnits: input.stakeMinorUnits }, warnings: input.acceptOddsChanges ? [] : slip.warnings }); return Promise.resolve(slip); }),
     clearSlip: jest.fn(() => { slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(slip); }),
-    placeDemoBet: jest.fn(() => Promise.resolve({ id: 'ticket-test-0001' })),
+    getWallet: jest.fn(() => Promise.resolve({ userId: 'guest-device-0001', currency: 'DCO', availableMinorUnits: 100000, bonusMinorUnits: 10000, updatedAt: '2026-09-08T12:00:00.000Z' })),
+    getWalletLedger: jest.fn(() => Promise.resolve([])),
+    depositDemoFunds: jest.fn(),
+    withdrawDemoFunds: jest.fn(),
+    getPlacedTickets: jest.fn(() => Promise.resolve([])),
+    placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
 
@@ -168,7 +173,7 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () =>
     byTestId('place-demo-bet-button').props.onPress(),
   );
-  expect(renderer!.root.findByProps({ children: 'Demo bet accepted' })).toBeTruthy();
+  expect(renderer!.root.findByProps({ children: 'Demo ticket confirmed' })).toBeTruthy();
 
   await ReactTestRenderer.act(async () =>
     byTestId('tab-live').props.onPress(),

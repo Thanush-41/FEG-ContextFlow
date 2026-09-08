@@ -4,6 +4,8 @@ export const SPORTS_EVENT_MODEL = 'SportsEvent';
 export const DEMO_TICKET_MODEL = 'DemoTicket';
 export const EVENT_DETAIL_MODEL = 'EventDetail';
 export const BET_SLIP_MODEL = 'BetSlip';
+export const WALLET_MODEL = 'Wallet';
+export const LEDGER_ENTRY_MODEL = 'LedgerEntry';
 
 const selectionSchema = new Schema(
   { id: { type: String, required: true }, label: { type: String, required: true }, odds: { type: Number, required: true }, previousOdds: Number, state: String, features: [String] },
@@ -40,6 +42,9 @@ export const demoTicketSchema = new Schema(
     selections: { type: [betSelectionSchema], required: true },
     stake: { currency: String, minorUnits: Number },
     potentialReturn: { currency: String, minorUnits: Number },
+    code: { type: String, unique: true, sparse: true, index: true }, calculation: Schema.Types.Mixed,
+    walletBeforeMinorUnits: Number, walletAfterMinorUnits: Number,
+    placementSnapshot: [Schema.Types.Mixed], audit: Schema.Types.Mixed,
   },
   { versionKey: false },
 );
@@ -81,3 +86,16 @@ export const betSlipSchema = new Schema({
   stake: Schema.Types.Mixed, selections: [slipSelectionSchema], totals: Schema.Types.Mixed,
   warnings: [slipWarningSchema], updatedAt: String,
 }, { versionKey: false });
+
+export const walletSchema = new Schema({
+  userId: { type: String, required: true, unique: true, index: true }, currency: { type: String, required: true },
+  availableMinorUnits: { type: Number, required: true }, bonusMinorUnits: { type: Number, required: true }, updatedAt: { type: String, required: true },
+}, { versionKey: false });
+
+const postingSchema = new Schema({ account: String, amountMinorUnits: Number }, { _id: false });
+export const ledgerEntrySchema = new Schema({
+  id: { type: String, required: true, unique: true, index: true }, userId: { type: String, required: true, index: true },
+  type: String, amountMinorUnits: Number, currency: String, balanceAfterMinorUnits: Number,
+  idempotencyKey: { type: String, required: true, unique: true, index: true }, ticketId: String,
+  postings: [postingSchema], createdAt: { type: String, required: true, index: true },
+}, { versionKey: false, timestamps: false });

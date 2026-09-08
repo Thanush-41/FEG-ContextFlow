@@ -7,8 +7,12 @@ import {
   type EventDetailResponse,
   type BetBuilderValidation,
   type BetSlip,
+  type LedgerEntry,
+  type PlaceSlipBet,
   type SlipMode,
   type SportsEvent,
+  type Wallet,
+  type WalletMutation,
 } from '@feg/contracts';
 
 export class ContextFlowClient {
@@ -74,6 +78,34 @@ export class ContextFlowClient {
 
   getTickets(): Promise<DemoTicket[]> {
     return this.get('/api/bets');
+  }
+
+  getWallet(userId: string): Promise<Wallet> {
+    return this.get(`/api/wallets/${encodeURIComponent(userId)}`);
+  }
+
+  getWalletLedger(userId: string): Promise<LedgerEntry[]> {
+    return this.get(`/api/wallets/${encodeURIComponent(userId)}/ledger`);
+  }
+
+  depositDemoFunds(userId: string, input: WalletMutation): Promise<{ wallet: Wallet; entry: LedgerEntry }> {
+    return this.post(`/api/wallets/${encodeURIComponent(userId)}/deposit`, input);
+  }
+
+  withdrawDemoFunds(userId: string, input: WalletMutation): Promise<{ wallet: Wallet; entry: LedgerEntry }> {
+    return this.post(`/api/wallets/${encodeURIComponent(userId)}/withdraw`, input);
+  }
+
+  placeSlipBet(input: PlaceSlipBet): Promise<DemoTicket> {
+    return this.post('/api/tickets/place', input);
+  }
+
+  getPlacedTickets(ownerId: string): Promise<DemoTicket[]> {
+    return this.get(`/api/tickets/${encodeURIComponent(ownerId)}`);
+  }
+
+  findPlacedTicket(ownerId: string, code: string): Promise<DemoTicket> {
+    return this.get(`/api/tickets/${encodeURIComponent(ownerId)}/code/${encodeURIComponent(code)}`);
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

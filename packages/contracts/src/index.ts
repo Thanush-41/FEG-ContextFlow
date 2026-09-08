@@ -207,6 +207,40 @@ export const UpdateSlipSchema = z.object({
 });
 export type UpdateSlip = z.infer<typeof UpdateSlipSchema>;
 
+export const WalletSchema = z.object({
+  userId: PublicIdSchema,
+  currency: z.literal('DCO'),
+  availableMinorUnits: z.number().int().nonnegative(),
+  bonusMinorUnits: z.number().int().nonnegative(),
+  updatedAt: z.string().datetime(),
+});
+export type Wallet = z.infer<typeof WalletSchema>;
+
+export const LedgerEntrySchema = z.object({
+  id: PublicIdSchema,
+  userId: PublicIdSchema,
+  type: z.enum(['demo_deposit', 'demo_withdrawal', 'bet_debit', 'bet_refund', 'bonus']),
+  amountMinorUnits: z.number().int(),
+  currency: z.literal('DCO'),
+  balanceAfterMinorUnits: z.number().int().nonnegative(),
+  idempotencyKey: z.string().uuid(),
+  ticketId: PublicIdSchema.optional(),
+  postings: z.array(z.object({ account: z.enum(['wallet', 'demo_reserve']), amountMinorUnits: z.number().int() })).length(2),
+  createdAt: z.string().datetime(),
+});
+export type LedgerEntry = z.infer<typeof LedgerEntrySchema>;
+
+export const WalletMutationSchema = z.object({ amountMinorUnits: z.number().int().positive().max(10_000_000), idempotencyKey: z.string().uuid() });
+export type WalletMutation = z.infer<typeof WalletMutationSchema>;
+
+export const PlaceSlipBetSchema = z.object({
+  ownerId: PublicIdSchema,
+  tab: z.number().int().min(1).max(4),
+  expectedVersion: z.number().int().nonnegative(),
+  idempotencyKey: z.string().uuid(),
+});
+export type PlaceSlipBet = z.infer<typeof PlaceSlipBetSchema>;
+
 export const BetSelectionInputSchema = z.object({
   eventId: PublicIdSchema,
   marketId: PublicIdSchema,
@@ -228,6 +262,12 @@ export const DemoTicketSchema = z.object({
   selections: z.array(BetSelectionInputSchema),
   stake: DemoMoneySchema,
   potentialReturn: DemoMoneySchema,
+  code: z.string().min(8).optional(),
+  calculation: SlipTotalsSchema.optional(),
+  walletBeforeMinorUnits: z.number().int().nonnegative().optional(),
+  walletAfterMinorUnits: z.number().int().nonnegative().optional(),
+  placementSnapshot: z.array(SlipSelectionSchema).optional(),
+  audit: z.object({ actor: PublicIdSchema, placedAt: z.string().datetime(), idempotencyKey: z.string().uuid() }).optional(),
 });
 export type DemoTicket = z.infer<typeof DemoTicketSchema>;
 

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Linking, NativeEventEmitter, NativeModules, PanResponder, Platform, Pressable,
+  Alert, Linking, NativeEventEmitter, NativeModules, PanResponder, Platform, Pressable, Share,
   ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
-import type { BetBuilderValidation, BetSlip, DetailedMarket, EventDetailResponse, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -45,8 +45,8 @@ function apiBaseUrl() {
   return Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 }
 
-const api = new ContextFlowClient(apiBaseUrl(), async () => undefined);
 const slipOwnerId = 'guest-device-0001';
+const api = new ContextFlowClient(apiBaseUrl(), async () => slipOwnerId);
 
 function toUiEvent(event: SportsEvent): Event {
   const market = event.markets[0];
@@ -86,8 +86,11 @@ function App() {
   const [isOfferLoading, setIsOfferLoading] = useState(true);
   const [offerError, setOfferError] = useState(false);
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
-  const [ticketId, setTicketId] = useState<string | null>(null);
+  const [ticket, setTicket] = useState<DemoTicket | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [slip, setSlip] = useState<BetSlip | null>(null);
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
@@ -98,6 +101,16 @@ function App() {
   useEffect(() => { countRef.current = count; }, [count]);
 
   useEffect(() => { api.getSlip(slipOwnerId, slipTab).then(setSlip).catch(() => undefined); }, [slipTab]);
+
+  const refreshWallet = useCallback(async () => {
+    const [nextWallet, nextLedger] = await Promise.all([api.getWallet(slipOwnerId), api.getWalletLedger(slipOwnerId)]);
+    setWallet(nextWallet); setLedger(nextLedger);
+  }, []);
+
+  useEffect(() => {
+    refreshWallet().catch(() => undefined);
+    api.getPlacedTickets(slipOwnerId).then(tickets => setTicket(tickets[0] ?? null)).catch(() => undefined);
+  }, [refreshWallet]);
 
   useEffect(() => {
     if (!slip) return;
@@ -252,15 +265,17 @@ function App() {
 
   const placeDemoBet = async () => {
     if (!slip?.selections.length || slip.warnings.length) return;
-    const selections = slip.selections.map(selection => ({ eventId: selection.eventId, marketId: selection.marketId, selectionId: selection.selectionId, acceptedOdds: selection.currentOdds }));
     setIsPlacingBet(true);
     try {
-      const ticket = await api.placeDemoBet({
+      const placed = await api.placeSlipBet({
+        ownerId: slipOwnerId,
+        tab: slipTab,
+        expectedVersion: slip.version,
         idempotencyKey: `f37970b1-1127-45b1-ab01-${String(slip.version).padStart(12, '0')}`,
-        stake: slip.stake,
-        selections,
       });
-      setTicketId(ticket.id);
+      setTicket(placed);
+      setSlip(await api.getSlip(slipOwnerId, slipTab));
+      await refreshWallet();
     } catch (error) {
       Alert.alert('Demo bet', error instanceof Error ? error.message : 'Unable to place demo bet.');
     } finally {
@@ -290,9 +305,9 @@ function App() {
             onToggleActivity={toggleLiveActivity} onToggleVoice={toggleVoiceInput} onNotify={sendNotification} />}
           {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdds={selectedOddKeys} onSelect={toggleOfferOdd} />}
-          {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(slip?.selections.length)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
+          {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} />}
           {activeTab === 'Casino' && <CasinoScreen />}
-          {activeTab === 'Menu' && <MenuScreen />}
+          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : <MenuScreen onWallet={() => setWalletOpen(true)} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
           onMode={async mode => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, mode, ...(mode === 'system' ? { systemSize: Math.max(1, slip.selections.length - 1) } : {}) })); }}
@@ -519,15 +534,42 @@ function SlipSheet({ slip, busy, view, onView, activeTab, onTab, onMode, onStake
   </View>;
 }
 
-function TicketsScreen({ hasSelection, isPlacing, ticketId, onPlace }: { hasSelection: boolean; isPlacing: boolean; ticketId: string | null; onPlace: () => void }) {
+function TicketsScreen({ slip, wallet, ticket, isPlacing, onStake, onPlace }: { slip: BetSlip | null; wallet: Wallet | null; ticket: DemoTicket | null; isPlacing: boolean; onStake: (minorUnits: number) => void; onPlace: () => void }) {
+  const insufficient = Boolean(slip && wallet && slip.stake.minorUnits > wallet.availableMinorUnits);
+  const canPlace = Boolean(slip?.selections.length && slip.totals && !slip.warnings.length && !insufficient);
+  if (ticket && !slip?.selections.length) return <View testID="tickets-screen">
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>BET RECEIPT</Text><Text style={styles.ticketStatus}>OPEN</Text></View>
+    <View style={styles.receiptCard} testID="ticket-receipt">
+      <Text style={styles.receiptCheck}>✓</Text><Text style={styles.ticketTitle}>Demo ticket confirmed</Text>
+      <Text selectable style={styles.receiptCode} testID="ticket-code">{ticket.code ?? ticket.id}</Text>
+      <View style={styles.receiptDivider} />
+      <ReceiptRow label="SELECTIONS" value={String(ticket.selections.length)} />
+      <ReceiptRow label="TOTAL ODDS" value={ticket.calculation?.totalOdds.toFixed(2) ?? '—'} />
+      <ReceiptRow label="STAKE" value={`${(ticket.stake.minorUnits / 100).toFixed(2)} DCO`} />
+      <ReceiptRow label="BONUS" value={`${((ticket.calculation?.bonusMinorUnits ?? 0) / 100).toFixed(2)} DCO`} />
+      <ReceiptRow label="POTENTIAL RETURN" value={`${(ticket.potentialReturn.minorUnits / 100).toFixed(2)} DCO`} highlight />
+      <ReceiptRow label="BALANCE AFTER" value={`${((ticket.walletAfterMinorUnits ?? wallet?.availableMinorUnits ?? 0) / 100).toFixed(2)} DCO`} />
+      <View style={styles.receiptActions}><Pressable testID="copy-ticket-button" onPress={() => Alert.alert('Ticket code', `${ticket.code ?? ticket.id}\nSelect and copy the code above.`)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>COPY CODE</Text></Pressable><Pressable testID="share-ticket-button" onPress={() => Share.share({ message: `FEG demo ticket ${ticket.code ?? ticket.id}` })} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>SHARE</Text></Pressable></View>
+    </View>
+  </View>;
   return <View testID="tickets-screen">
-    <View style={styles.screenHeading}><Text style={styles.screenTitle}>TICKETS</Text><Text style={styles.sectionAction}>HISTORY</Text></View>
-    {hasSelection ? <View style={styles.ticketCard}>
-      <Text style={styles.ticketStatus}>{ticketId ? 'OPEN TICKET' : 'DRAFT · 1 SELECTION'}</Text><Text style={styles.ticketTitle}>{ticketId ? 'Demo bet accepted' : 'Your demo bet is ready'}</Text>
-      <View style={styles.stakeRow}><Text style={styles.stakeLabel}>STAKE</Text><Text style={styles.stakeValue}>1.00 DCO</Text></View>
-      {ticketId ? <Text style={styles.ticketId} numberOfLines={1}>{ticketId}</Text> : <Pressable onPress={onPlace} disabled={isPlacing} style={[styles.placeButton, isPlacing && styles.disabled]} testID="place-demo-bet-button"><Text style={styles.placeButtonText}>{isPlacing ? 'PLACING…' : 'PLACE DEMO BET'}</Text></Pressable>}
+    <View style={styles.screenHeading}><Text style={styles.screenTitle}>REVIEW TICKET</Text><Text style={styles.ticketStatus}>DEMO</Text></View>
+    {slip?.selections.length ? <View style={styles.ticketCard}>
+      <Text style={styles.ticketStatus}>{slip.mode.toUpperCase()} · {slip.selections.length} PICKS</Text><Text style={styles.ticketTitle}>Confirm your ticket</Text>
+      {slip.selections.map(selection => <View key={selection.selectionId} style={styles.reviewSelection}><View style={styles.slipSelectionCopy}><Text style={styles.slipEvent}>{selection.eventLabel}</Text><Text style={styles.slipMarket}>{selection.marketLabel} · {selection.selectionLabel}</Text></View><Text style={styles.slipOdd}>{selection.currentOdds.toFixed(2)}</Text></View>)}
+      <Text style={styles.quickAmountLabel}>QUICK STAKE</Text><View style={styles.quickAmounts}>{[100, 500, 1000, 2500].map(amount => <Pressable key={amount} testID={`quick-stake-${amount}`} onPress={() => onStake(amount)} style={[styles.quickAmount, slip.stake.minorUnits === amount && styles.quickAmountActive]}><Text style={styles.quickAmountText}>{(amount / 100).toFixed(0)}</Text></Pressable>)}</View>
+      <ReceiptRow label="AVAILABLE" value={`${((wallet?.availableMinorUnits ?? 0) / 100).toFixed(2)} DCO`} />
+      <ReceiptRow label="STAKE" value={`${(slip.stake.minorUnits / 100).toFixed(2)} DCO`} />
+      <ReceiptRow label="POTENTIAL RETURN" value={`${((slip.totals?.potentialReturnMinorUnits ?? 0) / 100).toFixed(2)} DCO`} highlight />
+      {insufficient && <Text style={styles.inlineError}>INSUFFICIENT DEMO BALANCE</Text>}
+      {slip.warnings.map(warning => <Text key={warning.code} style={styles.inlineError}>{warning.message}</Text>)}
+      <Pressable onPress={onPlace} disabled={isPlacing || !canPlace} style={[styles.placeButton, (isPlacing || !canPlace) && styles.disabled]} testID="place-demo-bet-button"><Text style={styles.placeButtonText}>{isPlacing ? 'CONFIRMING…' : 'CONFIRM DEMO TICKET'}</Text></Pressable>
     </View> : <EmptyState icon="▤" title="No tickets yet" body="Choose odds from Sport or Live to create your first demo ticket." />}
   </View>;
+}
+
+function ReceiptRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return <View style={styles.receiptRow}><Text style={styles.stakeLabel}>{label}</Text><Text style={[styles.stakeValue, highlight && styles.receiptHighlight]}>{value}</Text></View>;
 }
 
 function CasinoScreen() {
@@ -538,11 +580,20 @@ function CasinoScreen() {
   </View>;
 }
 
-function MenuScreen() {
+function MenuScreen({ onWallet }: { onWallet: () => void }) {
   return <View testID="menu-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>MENU</Text></View>
     {['Profile & demo wallet', 'Promotions', 'Community', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
-      <Pressable key={item} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-wallet-button' : undefined} onPress={item === 'Profile & demo wallet' ? onWallet : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+  </View>;
+}
+
+function WalletScreen({ wallet, ledger, onBack, onMutate }: { wallet: Wallet | null; ledger: LedgerEntry[]; onBack: () => void; onMutate: (direction: 'deposit' | 'withdraw') => void }) {
+  return <View testID="wallet-screen">
+    <View style={styles.screenHeading}><Pressable onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>DEMO WALLET</Text><Text style={styles.ticketStatus}>NO CASH VALUE</Text></View>
+    <View style={styles.walletHero}><Text style={styles.walletLabel}>AVAILABLE DEMO COINS</Text><Text style={styles.walletBalance}>{((wallet?.availableMinorUnits ?? 0) / 100).toFixed(2)} DCO</Text><Text style={styles.walletBonus}>Bonus {((wallet?.bonusMinorUnits ?? 0) / 100).toFixed(2)} DCO</Text><View style={styles.walletActions}><Pressable testID="demo-deposit-button" onPress={() => onMutate('deposit')} style={styles.walletButton}><Text style={styles.placeButtonText}>+100 DEMO</Text></Pressable><Pressable testID="demo-withdraw-button" onPress={() => onMutate('withdraw')} style={styles.walletButtonSecondary}><Text style={styles.secondaryButtonText}>−100 DEMO</Text></Pressable></View></View>
+    <Text style={styles.groupHeading}>DEMO LEDGER</Text>
+    {ledger.length ? ledger.map(entry => <View key={entry.id} style={styles.ledgerRow}><View><Text style={styles.menuText}>{entry.type.replaceAll('_', ' ').toUpperCase()}</Text><Text style={styles.ledgerDate}>{new Date(entry.createdAt).toLocaleString()}</Text></View><View><Text style={[styles.ledgerAmount, entry.amountMinorUnits < 0 && styles.ledgerDebit]}>{entry.amountMinorUnits > 0 ? '+' : ''}{(entry.amountMinorUnits / 100).toFixed(2)}</Text><Text style={styles.ledgerBalance}>{(entry.balanceAfterMinorUnits / 100).toFixed(2)} DCO</Text></View></View>) : <Text style={styles.emptyBody}>No demo wallet activity yet.</Text>}
   </View>;
 }
 
@@ -760,6 +811,34 @@ const styles = StyleSheet.create({
   placeButton: { height: 42, backgroundColor: '#20A20E', alignItems: 'center', justifyContent: 'center' },
   placeButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   ticketId: { color: '#75B5FF', fontSize: 9, marginTop: 8 },
+  reviewSelection: { minHeight: 54, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#303A47', flexDirection: 'row', alignItems: 'center' },
+  quickAmountLabel: { color: '#8F9AA8', fontSize: 8, fontWeight: '900', marginTop: 15 },
+  quickAmounts: { flexDirection: 'row', gap: 6, marginTop: 7, marginBottom: 4 },
+  quickAmount: { flex: 1, height: 36, backgroundColor: '#2A3441', alignItems: 'center', justifyContent: 'center' },
+  quickAmountActive: { backgroundColor: '#1264C5' },
+  quickAmountText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  inlineError: { color: '#FF8189', fontSize: 8, fontWeight: '900', marginBottom: 10 },
+  receiptCard: { margin: 10, padding: 16, backgroundColor: '#151D28', borderTopWidth: 3, borderTopColor: '#20A20E' },
+  receiptCheck: { width: 38, height: 38, color: '#FFFFFF', backgroundColor: '#20A20E', borderRadius: 19, textAlign: 'center', lineHeight: 38, fontSize: 20, fontWeight: '900' },
+  receiptCode: { color: '#78B8FF', fontSize: 18, fontWeight: '900', letterSpacing: 1, marginTop: 13 },
+  receiptDivider: { height: 1, backgroundColor: '#303A47', marginVertical: 13 },
+  receiptRow: { minHeight: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  receiptHighlight: { color: '#5CDF7B' },
+  receiptActions: { flexDirection: 'row', gap: 7, marginTop: 14 },
+  secondaryButton: { flex: 1, height: 39, backgroundColor: '#273342', alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: '#8DC2FF', fontSize: 9, fontWeight: '900' },
+  walletHero: { margin: 10, padding: 18, backgroundColor: '#164B8D' },
+  walletLabel: { color: '#9CD0FF', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  walletBalance: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 8 },
+  walletBonus: { color: '#B8DCFF', fontSize: 10, marginTop: 5 },
+  walletActions: { flexDirection: 'row', gap: 7, marginTop: 18 },
+  walletButton: { flex: 1, height: 40, backgroundColor: '#20A20E', alignItems: 'center', justifyContent: 'center' },
+  walletButtonSecondary: { flex: 1, height: 40, backgroundColor: '#0D3767', alignItems: 'center', justifyContent: 'center' },
+  ledgerRow: { minHeight: 62, paddingHorizontal: 14, backgroundColor: '#111823', borderBottomWidth: 1, borderBottomColor: '#252D39', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ledgerDate: { color: '#798594', fontSize: 8, marginTop: 4 },
+  ledgerAmount: { color: '#55D777', fontSize: 11, fontWeight: '900', textAlign: 'right' },
+  ledgerDebit: { color: '#FF8189' },
+  ledgerBalance: { color: '#8995A3', fontSize: 8, marginTop: 3, textAlign: 'right' },
   casinoGrid: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   gameTile: { width: '48.9%', height: 118, padding: 10, backgroundColor: '#232B36', justifyContent: 'space-between' },
   gameTileFeatured: { backgroundColor: '#164B8D' },

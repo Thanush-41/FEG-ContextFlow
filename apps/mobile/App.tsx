@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Linking, NativeEventEmitter, NativeModules, Platform, Pressable,
   ScrollView, StatusBar, StyleSheet, Text, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
-import type { SportsEvent } from '@feg/contracts';
+import type { OfferLeague, OfferResponse, OfferTimeFilter, SportsEvent } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -20,17 +21,18 @@ type CounterLiveActivityModule = {
 };
 
 type VoiceProgress = { transcript: string; wordCount: number; isFinal: boolean; error?: string };
+type UiOdd = { label: string; value: string; state: 'active' | 'changed' | 'locked' | 'disabled'; previous?: string };
 type Event = {
   id: string; label: string; league: string; starts: string;
-  home: string; away: string; markets: readonly [string, string, string];
+  home: string; away: string; markets: readonly UiOdd[]; features: SportsEvent['features']; totalMarketCount: number;
   apiEventId?: string; apiMarketId?: string; apiSelectionIds?: readonly string[];
 };
 type Tab = 'Live' | 'Sport' | 'Tickets' | 'Casino' | 'Menu';
 
 const fallbackEvents: Event[] = [
-  { id: 'chelsea-liverpool', label: 'BET BUILDER', league: 'ENGLAND · PREMIER LEAGUE', starts: 'STARTS IN 2H', home: 'Chelsea', away: 'Liverpool', markets: ['2.25', '3.40', '2.40'] },
-  { id: 'betis-madrid', label: 'POPULAR', league: 'SPAIN · LA LIGA', starts: 'TOMORROW 00:30', home: 'Real Betis', away: 'Real Madrid', markets: ['4.60', '3.85', '1.68'] },
-  { id: 'inter-milan', label: 'TOP MATCH', league: 'ITALY · SERIE A', starts: 'TOMORROW 02:15', home: 'Inter', away: 'AC Milan', markets: ['2.05', '3.25', '3.10'] },
+  { id: 'chelsea-liverpool', label: 'BET BUILDER', league: 'ENGLAND · PREMIER LEAGUE', starts: 'STARTS IN 2H', home: 'Chelsea', away: 'Liverpool', markets: [{ label: '1', value: '2.25', state: 'active' }, { label: 'X', value: '3.40', state: 'changed', previous: '3.25' }, { label: '2', value: '2.40', state: 'active' }], features: ['betBuilder'], totalMarketCount: 38 },
+  { id: 'betis-madrid', label: 'BOOSTED', league: 'SPAIN · LA LIGA', starts: 'TOMORROW 00:30', home: 'Real Betis', away: 'Real Madrid', markets: [{ label: '1', value: '4.60', state: 'active' }, { label: 'X', value: '3.85', state: 'active' }, { label: '2', value: '1.68', state: 'active' }], features: ['boostedOdds'], totalMarketCount: 42 },
+  { id: 'inter-milan', label: 'TOP MATCH', league: 'ITALY · SERIE A', starts: 'TOMORROW 02:15', home: 'Inter', away: 'AC Milan', markets: [{ label: '1', value: '2.05', state: 'active' }, { label: 'X', value: '3.25', state: 'locked' }, { label: '2', value: '3.10', state: 'active' }], features: ['tv'], totalMarketCount: 31 },
 ];
 
 const liveActivity = NativeModules.CounterLiveActivityModule as CounterLiveActivityModule | undefined;
@@ -46,7 +48,10 @@ const api = new ContextFlowClient(apiBaseUrl(), async () => undefined);
 
 function toUiEvent(event: SportsEvent): Event {
   const market = event.markets[0];
-  const odds = market?.selections.map(selection => selection.odds.toFixed(2)) ?? [];
+  const odds = market?.selections.map(selection => ({
+    label: selection.label, value: selection.odds.toFixed(2), state: selection.state,
+    previous: selection.previousOdds?.toFixed(2),
+  })) ?? [];
   return {
     id: event.id.replace(/^event-/, ''),
     label: event.status === 'live' ? `● LIVE  ${event.clock ?? ''}` : 'BET BUILDER',
@@ -54,7 +59,9 @@ function toUiEvent(event: SportsEvent): Event {
     starts: event.status === 'live' ? event.score ?? 'LIVE' : 'STARTS SOON',
     home: event.home,
     away: event.away,
-    markets: [odds[0] ?? '–', odds[1] ?? '–', odds[2] ?? '–'],
+    markets: odds,
+    features: event.features,
+    totalMarketCount: event.totalMarketCount ?? event.markets.length,
     apiEventId: event.id,
     apiMarketId: market?.id,
     apiSelectionIds: market?.selections.map(selection => selection.id),
@@ -73,6 +80,9 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('Sport');
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [offerEvents, setOfferEvents] = useState(fallbackEvents);
+  const [offer, setOffer] = useState<OfferResponse | null>(null);
+  const [isOfferLoading, setIsOfferLoading] = useState(true);
+  const [offerError, setOfferError] = useState(false);
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
@@ -81,16 +91,25 @@ function App() {
 
   useEffect(() => { countRef.current = count; }, [count]);
 
+  const periodFilter = useMemo<OfferTimeFilter>(() => ({
+    LIVE: 'live', TODAY: 'today', '1H': '1h', '3H': '3h', TOMORROW: 'tomorrow', ALL: 'all',
+  })[activePeriod] as OfferTimeFilter, [activePeriod]);
+
   useEffect(() => {
-    Promise.all([api.getEvents('scheduled'), api.getEvents('live')])
-      .then(([scheduled, live]) => {
-        if (scheduled.length) setOfferEvents(scheduled.map(toUiEvent));
+    let current = true;
+    setIsOfferLoading(true); setOfferError(false);
+    Promise.all([api.getOffer(periodFilter), api.getEvents('live')])
+      .then(([nextOffer, live]) => {
+        if (!current) return;
+        setOffer(nextOffer);
+        const nextEvents = nextOffer.leagues.flatMap(league => league.events).map(toUiEvent);
+        setOfferEvents(nextEvents.length ? nextEvents : fallbackEvents);
         setLiveEvents(live.map(toUiEvent));
       })
-      .catch(() => {
-        // Deterministic fixtures keep the demo usable while the local API starts.
-      });
-  }, []);
+      .catch(() => { if (current) setOfferError(true); })
+      .finally(() => { if (current) setIsOfferLoading(false); });
+    return () => { current = false; };
+  }, [periodFilter]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !liveActivity) { setIsCountLoaded(true); return; }
@@ -189,7 +208,7 @@ function App() {
     const selectionIndex = Number(selectedOdd.slice(separator + 1));
     const event = [...offerEvents, ...liveEvents].find(item => item.id === eventId);
     const selectionId = event?.apiSelectionIds?.[selectionIndex];
-    const acceptedOdds = Number(event?.markets[selectionIndex]);
+    const acceptedOdds = Number(event?.markets[selectionIndex]?.value);
     if (!event?.apiEventId || !event.apiMarketId || !selectionId || !acceptedOdds) {
       Alert.alert('Demo bet', 'Wait for the live offer to finish loading, then select again.');
       return;
@@ -216,33 +235,25 @@ function App() {
         <Header count={count} onVoice={() => setShowVoice(value => !value)} />
         {activeTab === 'Sport' && <NativePrompt />}
         {(activeTab === 'Sport' || activeTab === 'Live') && <PeriodTabs active={activePeriod} onChange={setActivePeriod} />}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {showVoice && <VoicePanel
+        {activeTab === 'Sport' && !detailEvent ? <OfferHome
+          offer={offer} events={offerEvents} loading={isOfferLoading} failed={offerError}
+          selectedOdd={selectedOdd} onSelect={setSelectedOdd} onOpen={setDetailEvent}
+          header={showVoice ? <VoicePanel
             count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
             onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)}
             onReset={() => setCount(0)} onToggleActivity={toggleLiveActivity}
             onToggleVoice={toggleVoiceInput} onNotify={sendNotification}
-          />}
-          {activeTab === 'Sport' && !detailEvent && <><View style={styles.hero}>
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroKicker}>FEG CONTEXTFLOW</Text>
-              <Text style={styles.heroTitle}>Speak. Pick. Confirm.</Text>
-              <Text style={styles.heroBody}>Your voice agent for every match.</Text>
-            </View>
-            <View style={styles.heroOrb}><Text style={styles.heroOrbText}>●</Text></View>
-          </View>
-          <QuickLinks />
-          <View style={styles.filters}>
-            <Text style={styles.filterTitle}>TOP OFFER</Text>
-            <Pressable style={styles.filterButton}><Text style={styles.filterButtonText}>☷  FILTER</Text></Pressable>
-          </View>
-          {offerEvents.map(event => <EventCard event={event} key={event.id} selectedOdd={selectedOdd} onSelect={setSelectedOdd} onOpen={() => setDetailEvent(event)} />)}</>}
+          /> : null}
+        /> : <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {showVoice && <VoicePanel count={count} isActive={isLiveActivityActive} isListening={isListening} transcript={transcript}
+            onDecrease={() => setCount(value => value - 1)} onIncrease={() => setCount(value => value + 1)} onReset={() => setCount(0)}
+            onToggleActivity={toggleLiveActivity} onToggleVoice={toggleVoiceInput} onNotify={sendNotification} />}
           {activeTab === 'Sport' && detailEvent && <EventDetail event={detailEvent} selectedOdd={selectedOdd} onBack={() => setDetailEvent(null)} onSelect={setSelectedOdd} />}
           {activeTab === 'Live' && <LiveScreen events={liveEvents} selectedOdd={selectedOdd} onSelect={setSelectedOdd} />}
           {activeTab === 'Tickets' && <TicketsScreen hasSelection={Boolean(selectedOdd)} isPlacing={isPlacingBet} ticketId={ticketId} onPlace={placeDemoBet} />}
           {activeTab === 'Casino' && <CasinoScreen />}
           {activeTab === 'Menu' && <MenuScreen />}
-        </ScrollView>
+        </ScrollView>}
         {selectedOdd && <View style={styles.betBar}>
           <View><Text style={styles.betBarLabel}>BET SLIP · 1 PICK</Text><Text style={styles.betBarOdds}>Selection ready</Text></View>
           <Pressable onPress={() => setActiveTab('Tickets')} style={styles.betButton} testID="open-betslip-button"><Text style={styles.betButtonText}>OPEN</Text></Pressable>
@@ -274,8 +285,8 @@ function NativePrompt() {
 }
 
 function PeriodTabs({ active, onChange }: { active: string; onChange: (value: string) => void }) {
-  return <View style={styles.periodTabs}>{['TODAY', '1H', '3H', 'TOMORROW'].map(period =>
-    <Pressable key={period} onPress={() => onChange(period)} style={[styles.periodTab, active === period && styles.periodTabActive]}>
+  return <View style={styles.periodTabs}>{['LIVE', 'TODAY', '1H', '3H', 'TOMORROW', 'ALL'].map(period =>
+    <Pressable key={period} testID={`period-${period.toLowerCase()}`} onPress={() => onChange(period)} style={[styles.periodTab, active === period && styles.periodTabActive]}>
       <Text style={[styles.periodText, active === period && styles.periodTextActive]}>{period}</Text>
     </Pressable>)}</View>;
 }
@@ -286,19 +297,66 @@ function QuickLinks() {
     <Pressable key={label} style={styles.quickLink}><Text style={styles.quickIcon}>{icon}</Text><Text style={styles.quickLabel}>{label}</Text></Pressable>)}</View>;
 }
 
-function EventCard({ event, selectedOdd, onSelect, onOpen }: { event: Event; selectedOdd: string | null; onSelect: (value: string | null) => void; onOpen?: () => void }) {
-  const labels = ['1', 'X', '2'];
+type OfferRow = { kind: 'league'; league: OfferLeague } | { kind: 'event'; leagueId: string; event: Event };
+
+function OfferHome({ offer, events, loading, failed, selectedOdd, onSelect, onOpen, header }: {
+  offer: OfferResponse | null; events: Event[]; loading: boolean; failed: boolean; selectedOdd: string | null;
+  onSelect: (value: string | null) => void; onOpen: (event: Event) => void; header: React.ReactElement | null;
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const rows = useMemo<OfferRow[]>(() => {
+    if (!offer?.leagues.length) return events.flatMap((event, index) => index === 0
+      ? [{ kind: 'league' as const, league: { id: 'fallback-league', sportId: 'sport-football', name: event.league, pinned: false, events: [] } }, { kind: 'event' as const, leagueId: 'fallback-league', event }]
+      : [{ kind: 'event' as const, leagueId: 'fallback-league', event }]);
+    const orderedLeagues = [...offer.leagues].sort((left, right) => Number(pinned.has(right.id)) - Number(pinned.has(left.id)));
+    return orderedLeagues.flatMap(league => [
+      { kind: 'league' as const, league },
+      ...(collapsed.has(league.id) ? [] : league.events.map(event => ({ kind: 'event' as const, leagueId: league.id, event: toUiEvent(event) }))),
+    ]);
+  }, [collapsed, events, offer, pinned]);
+  const featured = offer?.featured.length ? offer.featured.map(toUiEvent) : events.slice(0, 3);
+  const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => setter(value => {
+    const next = new Set(value); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+  return <FlashList
+    testID="offer-list" data={rows}
+    keyExtractor={(row, index) => row.kind === 'league' ? `league-${row.league.id}` : `event-${row.event.id}-${index}`}
+    contentContainerStyle={styles.offerListContent}
+    ListHeaderComponent={<>{header}<View style={styles.hero}><View style={styles.heroCopy}>
+      <Text style={styles.heroKicker}>FEG CONTEXTFLOW</Text><Text style={styles.heroTitle}>Speak. Pick. Confirm.</Text>
+      <Text style={styles.heroBody}>Your voice agent for every match.</Text></View><View style={styles.heroOrb}><Text style={styles.heroOrbText}>●</Text></View></View>
+      <QuickLinks />
+      <View style={styles.filters}><View><Text style={styles.filterTitle}>FEATURED PICKS</Text><Text style={styles.freshness}>{offer ? `${offer.cache.source.toUpperCase()} · ${offer.pagination.total} EVENTS` : 'DEMO OFFER'}</Text></View><Pressable style={styles.filterButton}><Text style={styles.filterButtonText}>☷  FILTER</Text></Pressable></View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>{featured.map(event => <Pressable accessibilityRole="button" accessibilityLabel={`Open ${event.home} versus ${event.away}`} key={`featured-${event.id}`} onPress={() => onOpen(event)} style={styles.featuredCard}><Text style={styles.featuredBadge}>{event.features.includes('betBuilder') ? 'BET BUILDER' : event.features.includes('boostedOdds') ? 'BOOSTED ODDS' : 'FEATURED'}</Text><Text style={styles.featuredTeams} numberOfLines={1}>{event.home} · {event.away}</Text><Text style={styles.featuredOdd}>{event.markets[0]?.value ?? '–'}</Text></Pressable>)}</ScrollView>
+      <View style={styles.offerHeading}><Text style={styles.filterTitle}>TOP OFFER</Text>{loading && <Text style={styles.loadingText}>REFRESHING…</Text>}{failed && <Text style={styles.offlineText}>CACHED DEMO</Text>}</View>
+    </>}
+    ListEmptyComponent={!loading ? <EmptyState icon="▦" title="No events in this window" body="Choose another time filter to keep browsing." /> : <OfferSkeleton />}
+    renderItem={({ item }) => item.kind === 'league' ? <View style={styles.leagueHeader} testID={`league-${item.league.id}`}>
+      <Pressable testID={`pin-${item.league.id}`} accessibilityRole="button" accessibilityLabel={`Pin ${item.league.name}`} onPress={() => toggleSet(setPinned, item.league.id)}><Text style={[styles.pin, pinned.has(item.league.id) && styles.pinActive]}>★</Text></Pressable>
+      <Pressable testID={`toggle-${item.league.id}`} accessibilityRole="button" accessibilityState={{ expanded: !collapsed.has(item.league.id) }} style={styles.leagueHeaderMain} onPress={() => toggleSet(setCollapsed, item.league.id)}><Text style={styles.leagueHeaderName}>{item.league.name.toUpperCase()}</Text><Text style={styles.chevron}>{collapsed.has(item.league.id) ? '›' : '⌄'}</Text></Pressable>
+    </View> : <EventCard event={item.event} selectedOdd={selectedOdd} onSelect={onSelect} onOpen={() => onOpen(item.event)} isFavorite={favorites.has(item.event.id)} onToggleFavorite={() => toggleSet(setFavorites, item.event.id)} />}
+  />;
+}
+
+function OfferSkeleton() {
+  return <View testID="offer-skeleton">{[0, 1, 2].map(item => <View key={item} style={styles.skeletonCard}><View style={styles.skeletonLine} /><View style={styles.skeletonLineShort} /></View>)}</View>;
+}
+
+function EventCard({ event, selectedOdd, onSelect, onOpen, isFavorite, onToggleFavorite }: { event: Event; selectedOdd: string | null; onSelect: (value: string | null) => void; onOpen?: () => void; isFavorite?: boolean; onToggleFavorite?: () => void }) {
   return <View style={styles.eventCard} testID={`event-${event.id}`}>
-    <View style={styles.eventTopline}><Text style={styles.eventBadge}>{event.label}</Text><Text style={styles.eventStarts}>{event.starts}</Text></View>
+    <View style={styles.eventTopline}><View style={styles.eventLabelRow}>{onToggleFavorite && <Pressable testID={`favorite-${event.id}`} accessibilityRole="button" accessibilityLabel={`${isFavorite ? 'Remove' : 'Add'} ${event.home} favorite`} onPress={onToggleFavorite}><Text style={[styles.eventFavorite, isFavorite && styles.eventFavoriteActive]}>★</Text></Pressable>}<Text style={styles.eventBadge}>{event.label}</Text></View><Text style={styles.eventStarts}>{event.starts}</Text></View>
     <View style={styles.leagueRow}><Text style={styles.league}>{event.league}</Text><Text style={styles.chevron}>⌄</Text></View>
     <Pressable onPress={onOpen} style={styles.teams}><Text style={styles.team}>{event.home}</Text><Text style={styles.team}>{event.away}</Text></Pressable>
-    <View style={styles.marketMeta}><Text style={styles.marketName}>MATCH RESULT</Text><Text style={styles.moreMarkets}>+38 markets</Text></View>
+    <View style={styles.marketMeta}><View style={styles.badgeRail}><Text style={styles.marketName}>MATCH RESULT</Text>{event.features.includes('betBuilder') && <Text style={styles.miniBadge}>BB</Text>}{event.features.includes('tv') && <Text style={styles.miniBadge}>TV</Text>}{event.features.includes('bonusTip') && <Text style={styles.miniBadge}>BONUS</Text>}</View><Text style={styles.moreMarkets}>+{event.totalMarketCount} markets</Text></View>
     <View style={styles.oddsRow}>{event.markets.map((odd, index) => {
       const key = `${event.id}-${index}`;
       const selected = selectedOdd === key;
-      return <Pressable key={key} onPress={() => onSelect(selected ? null : key)} style={[styles.oddButton, selected && styles.oddButtonSelected]} testID={`odd-${key}`}>
-        <Text style={[styles.oddLabel, selected && styles.oddTextSelected]}>{labels[index]}</Text>
-        <Text style={[styles.oddValue, selected && styles.oddTextSelected]}>{odd}</Text>
+      const disabled = odd.state === 'locked' || odd.state === 'disabled';
+      return <Pressable key={key} disabled={disabled} accessibilityRole="button" accessibilityState={{ selected, disabled }} onPress={() => onSelect(selected ? null : key)} style={[styles.oddButton, odd.state === 'changed' && styles.oddButtonChanged, disabled && styles.oddButtonDisabled, selected && styles.oddButtonSelected]} testID={`odd-${key}`}>
+        <Text style={[styles.oddLabel, selected && styles.oddTextSelected]}>{odd.label}</Text>
+        <View style={styles.oddValues}>{odd.previous && <Text style={styles.previousOdd}>{odd.previous}</Text>}<Text style={[styles.oddValue, selected && styles.oddTextSelected]}>{disabled ? '—' : odd.value}</Text></View>
       </Pressable>;
     })}</View>
   </View>;
@@ -345,7 +403,7 @@ function EventDetail({ event, selectedOdd, onBack, onSelect }: { event: Event; s
 }
 
 function LiveScreen({ events: liveEvents, selectedOdd, onSelect }: { events: Event[]; selectedOdd: string | null; onSelect: (value: string | null) => void }) {
-  const liveEvent: Event = liveEvents[0] ?? { id: 'dinamo-hajduk', label: '● LIVE  67\'', league: 'CROATIA · HNL', starts: '1 – 1', home: 'Dinamo Zagreb', away: 'Hajduk Split', markets: ['2.05', '2.80', '4.10'] };
+  const liveEvent: Event = liveEvents[0] ?? { id: 'dinamo-hajduk', label: '● LIVE  67\'', league: 'CROATIA · HNL', starts: '1 – 1', home: 'Dinamo Zagreb', away: 'Hajduk Split', markets: [{ label: '1', value: '2.05', state: 'active' }, { label: 'X', value: '2.80', state: 'active' }, { label: '2', value: '4.10', state: 'active' }], features: ['tv'], totalMarketCount: 28 };
   return <View testID="live-screen">
     <View style={styles.filters}><Text style={styles.filterTitle}>LIVE NOW</Text><Text style={styles.liveCount}>1 EVENT</Text></View>
     <EventCard event={liveEvent} selectedOdd={selectedOdd} onSelect={onSelect} />
@@ -414,6 +472,7 @@ const styles = StyleSheet.create({
   periodText: { color: '#9EA6B1', fontSize: 10, fontWeight: '700' },
   periodTextActive: { color: '#FFFFFF' },
   scrollContent: { paddingBottom: 16 },
+  offerListContent: { paddingBottom: 12 },
   hero: { height: 112, margin: 10, marginBottom: 4, padding: 16, overflow: 'hidden', backgroundColor: '#164B8D', flexDirection: 'row', alignItems: 'center' },
   heroCopy: { flex: 1, zIndex: 1 },
   heroKicker: { color: '#7FC2FF', fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
@@ -426,11 +485,28 @@ const styles = StyleSheet.create({
   quickIcon: { color: '#3E91F4', fontSize: 23 },
   quickLabel: { color: '#DDE3EA', fontSize: 10, fontWeight: '600' },
   filters: { height: 48, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  freshness: { color: '#687483', fontSize: 7, fontWeight: '800', marginTop: 3 },
   filterTitle: { color: '#F1F4F8', fontSize: 12, fontWeight: '900' },
   filterButton: { backgroundColor: '#272D36', borderRadius: 4, paddingHorizontal: 10, paddingVertical: 7 },
   filterButtonText: { color: '#C9D0D9', fontSize: 9, fontWeight: '800' },
   eventCard: { marginHorizontal: 10, marginBottom: 8, backgroundColor: '#111823', borderWidth: 1, borderColor: '#252D39' },
+  featuredRail: { paddingHorizontal: 10, paddingBottom: 9, gap: 7 },
+  featuredCard: { width: 162, minHeight: 74, padding: 10, backgroundColor: '#182536', borderTopWidth: 2, borderTopColor: '#2E8BFF' },
+  featuredBadge: { color: '#71B3FF', fontSize: 7, fontWeight: '900' },
+  featuredTeams: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', marginTop: 8 },
+  featuredOdd: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', marginTop: 5 },
+  offerHeading: { minHeight: 38, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  loadingText: { color: '#6EAFFF', fontSize: 7, fontWeight: '900' },
+  offlineText: { color: '#F1A63A', fontSize: 7, fontWeight: '900' },
+  leagueHeader: { minHeight: 36, marginHorizontal: 10, marginBottom: 4, paddingHorizontal: 9, backgroundColor: '#1A222D', flexDirection: 'row', alignItems: 'center' },
+  leagueHeaderMain: { flex: 1, marginLeft: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  leagueHeaderName: { color: '#C5CDD7', fontSize: 8, fontWeight: '900' },
+  pin: { color: '#616D7B', fontSize: 13 },
+  pinActive: { color: '#F2C94C' },
   eventTopline: { height: 29, backgroundColor: '#171F2B', paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  eventLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  eventFavorite: { color: '#657181', fontSize: 11 },
+  eventFavoriteActive: { color: '#F2C94C' },
   eventBadge: { color: '#6EAFFF', fontSize: 8, fontWeight: '900' },
   eventStarts: { color: '#9AA4B0', fontSize: 8, fontWeight: '700' },
   leagueRow: { height: 29, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#242D39' },
@@ -439,13 +515,19 @@ const styles = StyleSheet.create({
   teams: { paddingHorizontal: 10, paddingTop: 9, gap: 4 },
   team: { color: '#F5F7FA', fontSize: 13, fontWeight: '700' },
   marketMeta: { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 6, flexDirection: 'row', justifyContent: 'space-between' },
+  badgeRail: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  miniBadge: { color: '#FFFFFF', backgroundColor: '#1264C5', fontSize: 6, fontWeight: '900', paddingHorizontal: 4, paddingVertical: 2 },
   marketName: { color: '#778290', fontSize: 8, fontWeight: '800' },
   moreMarkets: { color: '#69AFFF', fontSize: 8, fontWeight: '700' },
   oddsRow: { flexDirection: 'row', gap: 5, paddingHorizontal: 8, paddingBottom: 8 },
   oddButton: { flex: 1, height: 38, paddingHorizontal: 9, borderRadius: 3, backgroundColor: '#323944', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   oddButtonSelected: { backgroundColor: '#1264C5' },
+  oddButtonChanged: { borderWidth: 1, borderColor: '#F1A63A' },
+  oddButtonDisabled: { opacity: 0.42 },
   oddLabel: { color: '#9DA6B2', fontSize: 9, fontWeight: '800' },
   oddValue: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  oddValues: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  previousOdd: { color: '#9BA5B2', fontSize: 7, textDecorationLine: 'line-through' },
   oddTextSelected: { color: '#FFFFFF' },
   voicePanel: { margin: 10, marginBottom: 0, padding: 13, backgroundColor: '#111B28', borderWidth: 1, borderColor: '#286DB9' },
   voicePanelHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -513,6 +595,9 @@ const styles = StyleSheet.create({
   emptyIcon: { color: '#398DEB', fontSize: 36 },
   emptyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 14 },
   emptyBody: { maxWidth: 270, color: '#8995A3', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 7 },
+  skeletonCard: { height: 94, marginHorizontal: 10, marginBottom: 8, padding: 14, backgroundColor: '#151D28' },
+  skeletonLine: { width: '78%', height: 10, backgroundColor: '#27313E' },
+  skeletonLineShort: { width: '48%', height: 10, marginTop: 12, backgroundColor: '#222C38' },
 });
 
 export default App;

@@ -24,6 +24,9 @@ export const SelectionSchema = z.object({
   id: PublicIdSchema,
   label: z.string().min(1),
   odds: DecimalOddsSchema,
+  previousOdds: DecimalOddsSchema.optional(),
+  state: z.enum(['active', 'changed', 'locked', 'disabled']).default('active'),
+  features: z.array(z.enum(['boostedOdds', 'bonusTip'])).default([]),
 });
 export type Selection = z.infer<typeof SelectionSchema>;
 
@@ -31,6 +34,7 @@ export const MarketSchema = z.object({
   id: PublicIdSchema,
   name: z.string().min(1),
   selections: z.array(SelectionSchema).min(2),
+  features: z.array(z.enum(['boostedOdds', 'bonusTip'])).default([]),
 });
 export type Market = z.infer<typeof MarketSchema>;
 
@@ -45,8 +49,49 @@ export const SportsEventSchema = z.object({
   home: z.string().min(1),
   away: z.string().min(1),
   markets: z.array(MarketSchema),
+  sportId: PublicIdSchema.optional(),
+  leagueId: PublicIdSchema.optional(),
+  totalMarketCount: z.number().int().nonnegative().optional(),
+  features: z.array(z.enum(['betBuilder', 'boostedOdds', 'tv', 'bonusTip', 'advantage'])).default([]),
 });
 export type SportsEvent = z.infer<typeof SportsEventSchema>;
+
+export const OfferTimeFilterSchema = z.enum(['live', 'today', '1h', '3h', 'tomorrow', 'all']);
+export type OfferTimeFilter = z.infer<typeof OfferTimeFilterSchema>;
+
+export const OfferSportSchema = z.object({
+  id: PublicIdSchema,
+  name: z.string().min(1),
+  icon: z.string().optional(),
+  eventCount: z.number().int().nonnegative(),
+});
+export type OfferSport = z.infer<typeof OfferSportSchema>;
+
+export const OfferLeagueSchema = z.object({
+  id: PublicIdSchema,
+  sportId: PublicIdSchema,
+  name: z.string().min(1),
+  pinned: z.boolean().default(false),
+  events: z.array(SportsEventSchema),
+});
+export type OfferLeague = z.infer<typeof OfferLeagueSchema>;
+
+export const OfferResponseSchema = z.object({
+  timeFilter: OfferTimeFilterSchema,
+  featured: z.array(SportsEventSchema),
+  sports: z.array(OfferSportSchema),
+  leagues: z.array(OfferLeagueSchema),
+  cache: z.object({
+    source: z.enum(['psk', 'mongodb', 'fixture']),
+    generatedAt: z.string().datetime(),
+    maxAgeSeconds: z.number().int().nonnegative(),
+  }),
+  pagination: z.object({
+    nextCursor: z.string().nullable(),
+    total: z.number().int().nonnegative(),
+  }),
+});
+export type OfferResponse = z.infer<typeof OfferResponseSchema>;
 
 export const BetSelectionInputSchema = z.object({
   eventId: PublicIdSchema,

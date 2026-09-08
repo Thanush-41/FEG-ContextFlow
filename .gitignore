@@ -38,6 +38,10 @@ local.properties
 # node.js
 #
 node_modules/
+.env
+.env.*
+!.env.example
+*credentials*.env
 **/dist/
 npm-debug.log
 yarn-error.log

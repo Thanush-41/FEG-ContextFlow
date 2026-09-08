@@ -2,6 +2,8 @@ import {
   type ApiError,
   type DemoTicket,
   type PlaceDemoBet,
+  type OfferResponse,
+  type OfferTimeFilter,
   type SportsEvent,
 } from '@feg/contracts';
 
@@ -28,6 +30,10 @@ export class ContextFlowClient {
 
   getEvent(eventId: string): Promise<SportsEvent> {
     return this.get(`/api/sports/events/${eventId}`);
+  }
+
+  getOffer(timeFilter: OfferTimeFilter, cursor = 0, limit = 100): Promise<OfferResponse> {
+    return this.get(`/api/offer?timeFilter=${timeFilter}&cursor=${cursor}&limit=${limit}`);
   }
 
   placeDemoBet(input: PlaceDemoBet): Promise<DemoTicket> {

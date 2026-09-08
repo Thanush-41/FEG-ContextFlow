@@ -5,6 +5,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import type { DemoTicket, SportsEvent } from '@feg/contracts';
 
 @WebSocketGateway({ namespace: '/realtime', cors: { origin: false } })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -17,5 +18,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   handleDisconnect(_client: Socket) {
     // Connection metrics are added with the observability provider.
+  }
+
+  publishEvent(event: SportsEvent) {
+    this.server?.emit('event.updated', event);
+  }
+
+  publishTicket(ticket: DemoTicket) {
+    this.server?.emit('ticket.created', ticket);
   }
 }

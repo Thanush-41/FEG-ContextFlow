@@ -7,7 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { ContextFlowClient } from '@feg/api-client';
 import { useLiveFeed } from './useLiveFeed';
-import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, CommunityPost, ContentArticle, ContentKind, DemoProfile, DemoSession, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, OfferLeague, OfferResponse, OfferTimeFilter, Promotion, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
+import type { BetBuilderValidation, BetSlip, CashoutQuote, CasinoGame, CasinoRound, CommunityPost, ContentArticle, ContentKind, DemoProfile, DemoSession, DemoTicket, DetailedMarket, EventDetailResponse, LedgerEntry, LottoDraw, LottoEntry, OfferLeague, OfferResponse, OfferTimeFilter, Promotion, SlipMode, SportsEvent, Wallet } from '@feg/contracts';
 
 type CounterLiveActivityModule = {
   start: (count: number) => Promise<string>;
@@ -102,6 +102,9 @@ function App() {
   const [content, setContent] = useState<ContentArticle[]>([]);
   const [communityOpen, setCommunityOpen] = useState(false);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
+  const [lottoOpen, setLottoOpen] = useState(false);
+  const [lottoDraws, setLottoDraws] = useState<LottoDraw[]>([]);
+  const [lottoEntries, setLottoEntries] = useState<LottoEntry[]>([]);
   const [slip, setSlip] = useState<BetSlip | null>(null);
   const [slipTab, setSlipTab] = useState(1);
   const [slipView, setSlipView] = useState<'compact' | 'expanded' | 'full'>('compact');
@@ -394,6 +397,12 @@ function App() {
     catch (error) { Alert.alert('Community', error instanceof Error ? error.message : 'Unable to load the community feed.'); }
   };
 
+  const openLotto = async () => {
+    setLottoOpen(true);
+    try { const [draws, entries] = await Promise.all([api.getLottoDraws(), api.getLottoEntries()]); setLottoDraws(draws); setLottoEntries(entries); }
+    catch (error) { Alert.alert('Demo lotto', error instanceof Error ? error.message : 'Unable to load demo lotto.'); }
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView edges={['top']} style={styles.screen}>
@@ -419,7 +428,7 @@ function App() {
           {activeTab === 'Live' && detailEvent && <EventDetail event={detailEvent} onBack={() => setDetailEvent(null)} onAddBuilder={addBuilderToSlip} />}
           {activeTab === 'Tickets' && <TicketsScreen slip={slip} wallet={wallet} ticket={ticket} tickets={tickets} isPlacing={isPlacingBet} onStake={async amount => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, stakeMinorUnits: amount })); }} onPlace={placeDemoBet} onSelect={setTicket} onBack={() => setTicket(null)} onLookup={code => api.findPlacedTicket(slipOwnerId, code)} onQuote={selected => api.getCashoutQuote(slipOwnerId, selected.id)} onCashout={cashoutTicket} onCopy={copyTicket} />}
           {activeTab === 'Casino' && <CasinoScreen games={casinoGames} game={casinoGame} round={casinoRound} busy={casinoBusy} onOpen={value => { setCasinoGame(value); setCasinoRound(null); }} onBack={() => { setCasinoGame(null); setCasinoRound(null); }} onPlay={playCasino} />}
-          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : discoveryOpen ? <DiscoveryScreen route={discoveryOpen} promotions={promotions} content={content} onBack={() => setDiscoveryOpen(null)} onOptIn={async promotionId => { const updated = await api.optInPromotion(promotionId); setPromotions(current => current.map(item => item.id === updated.id ? updated : item)); }} /> : communityOpen ? <CommunityScreen posts={communityPosts} onBack={() => setCommunityOpen(false)} onReact={async postId => { const updated = await api.toggleCommunityReaction(postId); setCommunityPosts(current => current.map(item => item.id === updated.id ? updated : item)); }} onCopy={async postId => { if (!slip) return; const result = await api.copyCommunityPostToSlip(postId, slipTab, slip.version); setSlip(result.slip); setCommunityOpen(false); setActiveTab('Sport'); setSlipView('expanded'); if (result.unavailableSelectionIds.length) Alert.alert('Shared ticket', `${result.unavailableSelectionIds.length} selection(s) were unavailable.`); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} onDiscovery={openDiscovery} onCommunity={openCommunity} />)}
+          {activeTab === 'Menu' && (walletOpen ? <WalletScreen wallet={wallet} ledger={ledger} onBack={() => setWalletOpen(false)} onMutate={async direction => { const idempotencyKey = `${direction === 'deposit' ? 'd' : 'e'}17970b1-1127-45b1-ab01-${String(Date.now()).slice(-12).padStart(12, '0')}`; try { direction === 'deposit' ? await api.depositDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }) : await api.withdrawDemoFunds(slipOwnerId, { amountMinorUnits: 10_000, idempotencyKey }); await refreshWallet(); } catch (error) { Alert.alert('Demo wallet', error instanceof Error ? error.message : 'Unable to update demo funds.'); } }} /> : profileOpen ? <ProfileScreen profile={profile} sessions={sessions} onBack={() => setProfileOpen(false)} onWallet={() => { setProfileOpen(false); setWalletOpen(true); }} onSave={async input => { const updated = await api.updateDemoProfile(slipOwnerId, input); setProfile(updated); }} onRevoke={async sessionId => { await api.revokeDemoSession(slipOwnerId, sessionId); setSessions(await api.getDemoSessions(slipOwnerId)); }} /> : discoveryOpen ? <DiscoveryScreen route={discoveryOpen} promotions={promotions} content={content} onBack={() => setDiscoveryOpen(null)} onOptIn={async promotionId => { const updated = await api.optInPromotion(promotionId); setPromotions(current => current.map(item => item.id === updated.id ? updated : item)); }} /> : communityOpen ? <CommunityScreen posts={communityPosts} onBack={() => setCommunityOpen(false)} onReact={async postId => { const updated = await api.toggleCommunityReaction(postId); setCommunityPosts(current => current.map(item => item.id === updated.id ? updated : item)); }} onCopy={async postId => { if (!slip) return; const result = await api.copyCommunityPostToSlip(postId, slipTab, slip.version); setSlip(result.slip); setCommunityOpen(false); setActiveTab('Sport'); setSlipView('expanded'); if (result.unavailableSelectionIds.length) Alert.alert('Shared ticket', `${result.unavailableSelectionIds.length} selection(s) were unavailable.`); }} /> : lottoOpen ? <LottoScreen draws={lottoDraws} entries={lottoEntries} onBack={() => setLottoOpen(false)} onSubmit={async (drawId, numbers) => { const entry = await api.createLottoEntry(drawId, numbers, `10770000-1127-45b1-ab01-${String(Date.now()).slice(-12)}`); setLottoEntries(current => [entry, ...current.filter(item => item.id !== entry.id)]); }} /> : <MenuScreen onProfile={() => setProfileOpen(true)} onDiscovery={openDiscovery} onCommunity={openCommunity} onLotto={openLotto} />)}
         </ScrollView>}
         <SlipSheet slip={slip} busy={slipBusy} view={slipView} onView={setSlipView} activeTab={slipTab} onTab={setSlipTab}
           onMode={async mode => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, mode, ...(mode === 'system' ? { systemSize: Math.max(1, slip.selections.length - 1) } : {}) })); }}
@@ -427,7 +436,7 @@ function App() {
           onRemove={async selectionId => { if (slip) setSlip(await api.removeSlipSelection(slipOwnerId, slipTab, selectionId, slip.version)); }}
           onAccept={async () => { if (slip) setSlip(await api.updateSlip(slipOwnerId, slipTab, { expectedVersion: slip.version, acceptOddsChanges: true })); }}
           onClear={async () => { if (slip) setSlip(await api.clearSlip(slipOwnerId, slipTab, slip.version)); }} onPlace={() => { setActiveTab('Tickets'); setSlipView('compact'); }} />
-        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); if (tab !== 'Menu') { setProfileOpen(false); setWalletOpen(false); setDiscoveryOpen(null); setCommunityOpen(false); } }} />
+        <BottomNavigation active={activeTab} onChange={tab => { setActiveTab(tab); setDetailEvent(null); if (tab !== 'Menu') { setProfileOpen(false); setWalletOpen(false); setDiscoveryOpen(null); setCommunityOpen(false); setLottoOpen(false); } }} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -736,13 +745,19 @@ function CasinoScreen({ games, game, round, busy, onOpen, onBack, onPlay }: { ga
   </View>;
 }
 
-function MenuScreen({ onProfile, onDiscovery, onCommunity }: { onProfile: () => void; onDiscovery: (route: 'promotions' | ContentKind) => void; onCommunity: () => void }) {
+function MenuScreen({ onProfile, onDiscovery, onCommunity, onLotto }: { onProfile: () => void; onDiscovery: (route: 'promotions' | ContentKind) => void; onCommunity: () => void; onLotto: () => void }) {
   const routes: Record<string, 'promotions' | ContentKind | undefined> = { Promotions: 'promotions', News: 'news', 'Help centre': 'help', 'Responsible play': 'responsible_play' };
   return <View testID="menu-screen">
     <View style={styles.screenHeading}><Text style={styles.screenTitle}>MENU</Text></View>
-    {['Profile & demo wallet', 'Promotions', 'Community', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
-      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-profile-button' : item === 'Community' ? 'open-community-button' : routes[item] ? `open-${routes[item]}-button` : undefined} onPress={item === 'Profile & demo wallet' ? onProfile : item === 'Community' ? onCommunity : routes[item] ? () => onDiscovery(routes[item]!) : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
+    {['Profile & demo wallet', 'Promotions', 'Community', 'Lotto', 'News', 'Help centre', 'Responsible play', 'Settings'].map(item =>
+      <Pressable key={item} testID={item === 'Profile & demo wallet' ? 'open-profile-button' : item === 'Community' ? 'open-community-button' : item === 'Lotto' ? 'open-lotto-button' : routes[item] ? `open-${routes[item]}-button` : undefined} onPress={item === 'Profile & demo wallet' ? onProfile : item === 'Community' ? onCommunity : item === 'Lotto' ? onLotto : routes[item] ? () => onDiscovery(routes[item]!) : undefined} style={styles.menuRow}><Text style={styles.menuText}>{item}</Text><Text style={styles.chevron}>›</Text></Pressable>)}
   </View>;
+}
+
+function LottoScreen({ draws, entries, onBack, onSubmit }: { draws: LottoDraw[]; entries: LottoEntry[]; onBack: () => void; onSubmit: (drawId: string, numbers: number[]) => Promise<void> }) {
+  const [draw, setDraw] = useState<LottoDraw | null>(null); const [numbers, setNumbers] = useState<number[]>([]); const [busy, setBusy] = useState(false);
+  if (draw) return <View testID="lotto-picker"><View style={styles.screenHeading}><Pressable testID="lotto-picker-back" onPress={() => setDraw(null)}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>{draw.title.toUpperCase()}</Text><Text style={styles.ticketStatus}>{numbers.length}/5</Text></View><Text style={styles.infoBody}>Choose five unique numbers. This entry uses demo coins only and has no cash value.</Text><View style={styles.numberGrid}>{Array.from({ length: 35 }, (_, index) => index + 1).map(number => <Pressable key={number} testID={`lotto-number-${number}`} onPress={() => setNumbers(current => current.includes(number) ? current.filter(item => item !== number) : current.length < 5 ? [...current, number] : current)} style={[styles.numberBall, numbers.includes(number) && styles.numberBallActive]}><Text style={styles.numberText}>{number}</Text></Pressable>)}</View><Pressable testID="lotto-quick-pick" onPress={() => setNumbers([3, 9, 14, 22, 31])} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>QUICK PICK</Text></Pressable><Pressable testID="save-lotto-entry" disabled={numbers.length !== 5 || busy} onPress={async () => { setBusy(true); try { await onSubmit(draw.id, numbers); setDraw(null); setNumbers([]); } finally { setBusy(false); } }} style={[styles.placeButton, (numbers.length !== 5 || busy) && styles.disabled]}><Text style={styles.placeButtonText}>{busy ? 'SAVING…' : 'SAVE DEMO ENTRY'}</Text></Pressable></View>;
+  return <View testID="lotto-screen"><View style={styles.screenHeading}><Pressable testID="lotto-back" onPress={onBack}><Text style={styles.backText}>‹</Text></Pressable><Text style={styles.screenTitle}>LOTTO</Text><Text style={styles.ticketStatus}>DEMO ONLY</Text></View>{draws.map(item => <View key={item.id} testID={`lotto-draw-${item.id}`} style={styles.discoveryCard}><View style={styles.gameTileTop}><Text style={styles.discoveryTitle}>{item.title}</Text><Text style={styles.ticketStatus}>{item.status.toUpperCase()}</Text></View><Text style={styles.walletBalance}>{(item.jackpotDcoMinorUnits / 100).toLocaleString()} DCO</Text>{item.winningNumbers ? <View style={styles.ballRow}>{item.winningNumbers.map(number => <Text key={number} style={styles.resultBall}>{number}</Text>)}</View> : <Pressable testID={`open-lotto-${item.id}`} onPress={() => { setDraw(item); setNumbers([]); }} style={styles.walletButton}><Text style={styles.placeButtonText}>PICK NUMBERS</Text></Pressable>}</View>)}<Text style={styles.groupHeading}>MY DEMO ENTRIES</Text>{entries.map(entry => <View key={entry.id} testID={`lotto-entry-${entry.id}`} style={styles.sessionRow}><Text style={styles.menuText}>{entry.numbers.join(' · ')}</Text><Text style={styles.ticketStatus}>{entry.status.toUpperCase()}</Text></View>)}{!entries.length && <Text style={styles.emptyBody}>No saved demo entries yet.</Text>}</View>;
 }
 
 function CommunityScreen({ posts, onBack, onReact, onCopy }: { posts: CommunityPost[]; onBack: () => void; onReact: (postId: string) => Promise<void>; onCopy: (postId: string) => Promise<void> }) {
@@ -1067,6 +1082,12 @@ const styles = StyleSheet.create({
   discoveryTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   discoverySummary: { color: '#AFBAC7', fontSize: 12, lineHeight: 18 },
   linkText: { color: '#6EAFFF', fontSize: 10, fontWeight: '900' },
+  numberGrid: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  numberBall: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#202A37', alignItems: 'center', justifyContent: 'center' },
+  numberBallActive: { backgroundColor: '#1264C5', borderWidth: 2, borderColor: '#70B5FF' },
+  numberText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  ballRow: { flexDirection: 'row', gap: 8 },
+  resultBall: { width: 32, height: 32, borderRadius: 16, paddingTop: 8, textAlign: 'center', color: '#FFFFFF', backgroundColor: '#1264C5', fontSize: 11, fontWeight: '900' },
   emptyState: { margin: 22, paddingVertical: 54, alignItems: 'center' },
   emptyIcon: { color: '#398DEB', fontSize: 36 },
   emptyTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', marginTop: 14 },

@@ -451,6 +451,24 @@ export const CommunityPostSchema = z.object({
 });
 export type CommunityPost = z.infer<typeof CommunityPostSchema>;
 
+export const LottoDrawSchema = z.object({
+  id: PublicIdSchema, title: z.string().min(1), drawAt: z.string().datetime(),
+  status: z.enum(['open', 'closed', 'drawn']), jackpotDcoMinorUnits: z.number().int().nonnegative(),
+  winningNumbers: z.array(z.number().int().min(1).max(35)).length(5).nullable(), demoOnly: z.literal(true),
+});
+export type LottoDraw = z.infer<typeof LottoDrawSchema>;
+export const CreateLottoEntrySchema = z.object({
+  numbers: z.array(z.number().int().min(1).max(35)).length(5).refine(numbers => new Set(numbers).size === numbers.length, 'Numbers must be unique.'),
+  idempotencyKey: z.string().uuid(),
+});
+export const LottoEntrySchema = z.object({
+  id: PublicIdSchema, ownerId: PublicIdSchema, drawId: PublicIdSchema,
+  numbers: z.array(z.number().int().min(1).max(35)).length(5), status: z.enum(['pending', 'won', 'lost']),
+  matchCount: z.number().int().min(0).max(5).optional(), createdAt: z.string().datetime(),
+  idempotencyKey: z.string().uuid(), demoOnly: z.literal(true),
+});
+export type LottoEntry = z.infer<typeof LottoEntrySchema>;
+
 export const CreateDemoSessionSchema = z.object({ deviceName: z.string().min(2).max(80) });
 
 export const VoiceSessionStateSchema = z.enum([

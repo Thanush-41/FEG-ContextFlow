@@ -32,6 +32,8 @@ import { DiscoveryController } from './discovery/discovery.controller.js';
 import { DiscoveryService } from './discovery/discovery.service.js';
 import { CommunityController } from './community/community.controller.js';
 import { CommunityService } from './community/community.service.js';
+import { LottoController } from './lotto/lotto.controller.js';
+import { LottoService } from './lotto/lotto.service.js';
 import {
   BET_SLIP_MODEL,
   DEMO_TICKET_MODEL,
@@ -41,6 +43,7 @@ import {
   WALLET_MODEL,
   DEMO_PROFILE_MODEL,
   DEMO_SESSION_MODEL,
+  LOTTO_ENTRY_MODEL,
   betSlipSchema,
   demoTicketSchema,
   eventDetailSchema,
@@ -49,6 +52,7 @@ import {
   walletSchema,
   demoProfileSchema,
   demoSessionSchema,
+  lottoEntrySchema,
 } from './persistence/models.js';
 
 const mongoUri = process.env.MONGODB_URI;
@@ -64,6 +68,7 @@ const persistenceImports = mongoUri
         { name: LEDGER_ENTRY_MODEL, schema: ledgerEntrySchema },
         { name: DEMO_PROFILE_MODEL, schema: demoProfileSchema },
         { name: DEMO_SESSION_MODEL, schema: demoSessionSchema },
+        { name: LOTTO_ENTRY_MODEL, schema: lottoEntrySchema },
       ]),
     ]
   : [];
@@ -73,7 +78,7 @@ const persistenceImports = mongoUri
     ConfigModule.forRoot({ isGlobal: true }),
     ...persistenceImports,
   ],
-  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController, AccountController, DiscoveryController, CommunityController],
-  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, AccountService, DiscoveryService, CommunityService, DemoAuthGuard, LiveAdminGuard],
+  controllers: [HealthController, SportsController, BetsController, OfferController, EventDetailController, SlipsController, WalletController, TicketPlacementController, TicketAdminController, LiveAdminController, LiveController, CasinoController, AccountController, DiscoveryController, CommunityController, LottoController],
+  providers: [LiveSimulationService, RealtimeGateway, SportsService, BetsService, PskOfferProvider, OfferService, EventDetailService, SlipsService, WalletService, TicketPlacementService, CasinoService, AccountService, DiscoveryService, CommunityService, LottoService, DemoAuthGuard, LiveAdminGuard],
 })
 export class AppModule {}

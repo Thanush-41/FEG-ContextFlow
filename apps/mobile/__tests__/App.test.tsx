@@ -23,6 +23,7 @@ jest.mock('@feg/api-client', () => ({
     let placedTickets: any[] = [];
     let profile = { userId: 'guest-device-0001', displayName: 'Demo Player', locale: 'en', oddsFormat: 'decimal', theme: 'dark', notificationsEnabled: true, transcriptStorageEnabled: false, sessionReminderMinutes: 60, maxDemoStakeMinorUnits: 10000, createdAt: '2026-09-08T12:00:00.000Z', updatedAt: '2026-09-08T12:00:00.000Z' };
     let promotions = [{ id: 'promo-live-boost', title: 'Live Match Boost', summary: 'Explore one featured live market.', rewardLabel: 'DEMO BOOST', terms: ['Demo coins only.'], eligible: true, optedIn: false, expiresAt: '2027-01-31T23:59:59.000Z', demoOnly: true }];
+    let lottoEntries: any[] = [];
     const withTotals = (next: typeof slip) => ({ ...next, totals: next.selections.length ? { lines: 1, totalOdds: next.selections.reduce((total, item) => total * item.currentOdds, 1), stakeMinorUnits: next.stake.minorUnits, grossReturnMinorUnits: 648, bonusMinorUnits: 0, feeMinorUnits: 0, taxMinorUnits: 0, potentialReturnMinorUnits: 648 } : null });
     return ({
     getEvents: jest.fn(() => Promise.resolve([])),
@@ -111,6 +112,9 @@ jest.mock('@feg/api-client', () => ({
     getCommunityFeed: jest.fn(() => Promise.resolve([{ id: 'community-live-derby', authorName: 'Mara', message: 'A shared demo ticket.', createdAt: '2026-09-09T00:30:00.000Z', reactionCount: 18, reactedByMe: false, sharedSelections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', acceptedOdds: 1.55 }], demoOnly: true }])),
     toggleCommunityReaction: jest.fn((postId: string) => Promise.resolve({ id: postId, authorName: 'Mara', message: 'A shared demo ticket.', createdAt: '2026-09-09T00:30:00.000Z', reactionCount: 19, reactedByMe: true, sharedSelections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', acceptedOdds: 1.55 }], demoOnly: true })),
     copyCommunityPostToSlip: jest.fn(() => { slip = withTotals({ ...slip, version: slip.version + 1, selections: [{ eventId: 'event-chelsea-liverpool', marketId: 'market', selectionId: 'home', eventLabel: 'Chelsea · Liverpool', marketLabel: 'Match result', selectionLabel: '1', acceptedOdds: 1.55, currentOdds: 1.55, state: 'active' }] }); return Promise.resolve({ slip, unavailableSelectionIds: [] }); }),
+    getLottoDraws: jest.fn(() => Promise.resolve([{ id: 'lotto-draw-friday', title: 'Friday Five', drawAt: '2026-09-11T19:00:00.000Z', status: 'open', jackpotDcoMinorUnits: 250000000, winningNumbers: null, demoOnly: true }, { id: 'lotto-draw-last', title: 'Tuesday Five', drawAt: '2026-09-08T19:00:00.000Z', status: 'drawn', jackpotDcoMinorUnits: 180000000, winningNumbers: [4, 11, 18, 23, 32], demoOnly: true }])),
+    getLottoEntries: jest.fn(() => Promise.resolve(lottoEntries)),
+    createLottoEntry: jest.fn((drawId: string, numbers: number[], idempotencyKey: string) => { const entry = { id: 'lotto-entry-test', ownerId: 'guest-device-0001', drawId, numbers, status: 'pending', createdAt: '2026-09-09T00:00:00.000Z', idempotencyKey, demoOnly: true }; lottoEntries = [entry]; return Promise.resolve(entry); }),
     placeSlipBet: jest.fn(() => { const placed = { id: 'ticket-test-0001', code: 'FEG-TEST-000001', status: 'open', placedAt: '2026-09-08T12:00:00.000Z', selections: slip.selections.map(item => ({ eventId: item.eventId, marketId: item.marketId, selectionId: item.selectionId, acceptedOdds: item.currentOdds })), stake: slip.stake, potentialReturn: { currency: 'DCO', minorUnits: slip.totals?.potentialReturnMinorUnits ?? 0 }, calculation: slip.totals, walletBeforeMinorUnits: 100000, walletAfterMinorUnits: 99900 }; placedTickets = [placed]; slip = { ...slip, version: slip.version + 1, selections: [], totals: null, warnings: [] }; return Promise.resolve(placed); }),
   }); }),
 }));
@@ -259,6 +263,14 @@ test('renders the sportsbook shell and preserves the voice word counter', async 
   await ReactTestRenderer.act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 50)); });
   expect(byTestId('offer-list')).toBeTruthy();
   expect(byTestId('slip-count').props.children).toEqual(['BET SLIP · ', 1, ' PICK', '']);
+  await ReactTestRenderer.act(async () => byTestId('tab-menu').props.onPress());
+  await ReactTestRenderer.act(async () => { await byTestId('open-lotto-button').props.onPress(); });
+  expect(byTestId('lotto-draw-lotto-draw-friday')).toBeTruthy();
+  await ReactTestRenderer.act(async () => byTestId('open-lotto-lotto-draw-friday').props.onPress());
+  await ReactTestRenderer.act(async () => byTestId('lotto-quick-pick').props.onPress());
+  expect(byTestId('save-lotto-entry').props.disabled).toBe(false);
+  await ReactTestRenderer.act(async () => { await byTestId('save-lotto-entry').props.onPress(); });
+  expect(byTestId('lotto-entry-lotto-entry-test')).toBeTruthy();
 });
 
 test('filters the live board across football, basketball, and tennis', async () => {

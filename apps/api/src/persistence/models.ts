@@ -8,6 +8,7 @@ export const WALLET_MODEL = 'Wallet';
 export const LEDGER_ENTRY_MODEL = 'LedgerEntry';
 export const DEMO_PROFILE_MODEL = 'DemoProfile';
 export const DEMO_SESSION_MODEL = 'DemoSession';
+export const LOTTO_ENTRY_MODEL = 'LottoEntry';
 
 const selectionSchema = new Schema(
   { id: { type: String, required: true }, label: { type: String, required: true }, odds: { type: Number, required: true }, previousOdds: Number, state: String, features: [String] },
@@ -113,4 +114,10 @@ export const demoProfileSchema = new Schema({
 export const demoSessionSchema = new Schema({
   id: { type: String, required: true, unique: true, index: true }, userId: { type: String, required: true, index: true },
   deviceName: String, current: Boolean, createdAt: String, lastSeenAt: String, revokedAt: String,
+}, { versionKey: false });
+
+export const lottoEntrySchema = new Schema({
+  id: { type: String, required: true, unique: true, index: true }, ownerId: { type: String, required: true, index: true },
+  drawId: String, numbers: [Number], status: String, matchCount: Number, createdAt: String,
+  idempotencyKey: { type: String, required: true, unique: true, index: true }, demoOnly: Boolean,
 }, { versionKey: false });

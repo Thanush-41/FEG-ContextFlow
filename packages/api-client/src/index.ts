@@ -11,6 +11,8 @@ import {
   type ContentArticle,
   type ContentKind,
   type CommunityPost,
+  type LottoDraw,
+  type LottoEntry,
   type PlaceDemoBet,
   type OfferResponse,
   type OfferTimeFilter,
@@ -188,6 +190,12 @@ export class ContextFlowClient {
 
   copyCommunityPostToSlip(postId: string, tab: number, expectedVersion: number): Promise<{ slip: BetSlip; unavailableSelectionIds: string[] }> {
     return this.post(`/api/community/posts/${encodeURIComponent(postId)}/copy`, { tab, expectedVersion });
+  }
+
+  getLottoDraws(): Promise<LottoDraw[]> { return this.get('/api/lotto/draws'); }
+  getLottoEntries(): Promise<LottoEntry[]> { return this.get('/api/lotto/entries'); }
+  createLottoEntry(drawId: string, numbers: number[], idempotencyKey: string): Promise<LottoEntry> {
+    return this.post(`/api/lotto/draws/${encodeURIComponent(drawId)}/entries`, { numbers, idempotencyKey });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

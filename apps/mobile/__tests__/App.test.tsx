@@ -11,7 +11,7 @@ jest.mock(
   () => jest.requireActual('react-native-safe-area-context/jest/mock').default,
 );
 
-test('increments, decrements, and resets the counter', async () => {
+test('renders the sportsbook shell and preserves the voice word counter', async () => {
   let renderer: ReactTestRenderer.ReactTestRenderer;
 
   await ReactTestRenderer.act(async () => {
@@ -22,6 +22,11 @@ test('increments, decrements, and resets the counter', async () => {
     renderer.root.findByProps({ testID });
 
   expect(byTestId('counter-value').props.children).toBe(0);
+  expect(byTestId('event-chelsea-liverpool')).toBeTruthy();
+
+  await ReactTestRenderer.act(async () =>
+    byTestId('voice-panel-button').props.onPress(),
+  );
 
   await ReactTestRenderer.act(async () =>
     byTestId('increase-button').props.onPress(),
@@ -40,4 +45,9 @@ test('increments, decrements, and resets the counter', async () => {
     byTestId('reset-button').props.onPress(),
   );
   expect(byTestId('counter-value').props.children).toBe(0);
+
+  await ReactTestRenderer.act(async () =>
+    byTestId('odd-chelsea-liverpool-0').props.onPress(),
+  );
+  expect(byTestId('open-betslip-button')).toBeTruthy();
 });

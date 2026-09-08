@@ -1,7 +1,10 @@
 appId: com.fegcontextflow
 ---
 - launchApp
-- assertVisible: "Simple Counter"
+- assertVisible: "TOP OFFER"
+- assertVisible: "Chelsea"
+- tapOn:
+    id: "voice-panel-button"
 - tapOn:
     id: "increase-button"
 - assertVisible: "1"

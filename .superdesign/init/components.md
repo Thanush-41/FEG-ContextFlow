@@ -1,8 +1,9 @@
 # Shared UI Components
 
-The current prototype has no shared component directory or exported reusable UI
-primitives. `CounterButton` is a private helper inside `apps/mobile/App.tsx`, so it is
-catalogued as page-local rather than represented here as a shared component.
+The first recording-matched React Native shell is implemented in
+`apps/mobile/App.tsx`. It defines page-local header, native-app prompt, period
+tabs, quick links, event/odds cards, voice session panel, bet-slip bar and
+bottom navigation. Shared visual tokens live in `packages/ui`.
 
-The Sprint 2 monorepo will introduce `packages/ui`; Superdesign context should
-be regenerated after those primitives exist.
+These boundaries will move into `apps/mobile/src/components` as route support
+expands, without changing their compact mobile geometry.

@@ -1,18 +1,14 @@
 # Page Dependency Trees
 
-## `/` — Counter prototype
+## `/` — Sports offer shell
 
 Entry: `apps/mobile/App.tsx`
 
-Dependencies:
+- React Native and safe-area primitives
+- recording-matched header, filters, promotional module and event cards
+- interactive odds selection and sticky bet-slip summary
+- expandable voice session panel
+- `NativeModules.CounterLiveActivityModule` for persisted word count, speech,
+  notifications, Home Screen widget and Dynamic Island/Live Activity updates
 
-- `apps/mobile/App.tsx`
-  - `react` (external)
-  - `react-native` (external)
-  - `react-native-safe-area-context` (external)
-  - `NativeModules.CounterLiveActivityModule` (runtime native bridge)
-
-The single page renders a centered counter, decrement/increment/reset controls,
-and iOS-only Live Activity, voice input, transcript and notification controls.
-All JSX, state, handlers, the page-local `CounterButton`, and styles are in the
-entry file. It has no local TypeScript imports.
+The screen uses local demo sports data while domain API modules are implemented.

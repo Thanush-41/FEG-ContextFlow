@@ -1,10 +1,9 @@
 # Extractable Components
 
-The prototype has no reusable layout components to extract. Its only helper,
-`CounterButton`, is a page-local circular control specific to the counter demo.
-It should not become part of the sportsbook design system.
+- `Header`, `NativePrompt`, `PeriodTabs` and `BottomNavigation` form the shell.
+- `EventCard` is the reusable event and three-way odds unit.
+- `VoicePanel` preserves the word counter, Live Activity, notification and
+  speech controls inside the sportsbook visual language.
+- The sticky bet-slip bar is shared across offer and event routes.
 
-After the approved application shell and `packages/ui` primitives are
-implemented, regenerate this catalogue so the header, bottom navigation, odds
-card, market group, slip summary and voice-session bar can become reusable
-Superdesign components.
+They remain page-local until navigation lands, avoiding premature public APIs.

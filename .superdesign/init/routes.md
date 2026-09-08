@@ -2,16 +2,11 @@
 
 ## Current route map
 
-| Path | Entry | Layout | Summary |
-| --- | --- | --- | --- |
-| `/` | `apps/mobile/App.tsx` | Inline safe-area wrapper | Counter, iOS Live Activity, voice and notification controls |
+| Path | Entry | Summary |
+| --- | --- | --- |
+| `/` | `apps/mobile/App.tsx` | Sports offer shell, odds selection and expandable voice session |
 
-There is no navigation library or router configuration in the current source.
-The native URL handler recognizes `fegcontextflow://voice` in `apps/mobile/App.tsx` and
-starts voice capture when a Live Activity is active.
-
-## Planned routes
-
-The approved target hierarchy is documented in
-`docs/sprint-1/information-architecture.md`. It is product specification, not
-current rendered source, and is intentionally not presented as implemented.
+The native URL handler recognizes `fegcontextflow://voice`, restores the saved
+word count, expands the voice panel and starts capture when a Live Activity is
+active. The next slice adds the hierarchy in
+`docs/sprint-1/information-architecture.md`.

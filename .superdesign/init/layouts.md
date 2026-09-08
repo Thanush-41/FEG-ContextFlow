@@ -1,9 +1,9 @@
 # Shared Layouts
 
-The current bare React Native prototype has no shared application shell, header,
-drawer, tab navigator, sidebar, or footer. `apps/mobile/App.tsx` directly renders its only
-screen inside `SafeAreaProvider` and `SafeAreaView`; it is therefore treated as
-a page entry in `pages.md`, not a reusable layout.
+`apps/mobile/App.tsx` implements the initial compact shell: blue brand header,
+native-app strip, time filters, dark scrolling content, optional sticky
+bet-slip bar and five-item bottom navigation. It matches the mobile hierarchy
+and density shown in the supplied psk.hr recording.
 
-The new sportsbook/voice shell is a Sprint 3 implementation target and must be
-designed before it is added to source.
+Navigation extraction is the next step; the current single entry keeps the
+native voice bridge stable during that work.

@@ -1,14 +1,15 @@
-# FEG ContextFlow Counter
+# FEG ContextFlow
 
 > This working counter is the protected native-interaction skeleton for the
 > broader FEG ContextFlow product. Sprint foundation documents live in
 > [`docs/sprint-1`](docs/sprint-1/README.md). The baseline is preserved by the
 > Git tag `voice-native-skeleton-v1`.
 
-A full-stack TypeScript monorepo whose preserved bare React Native app lives in
-`apps/mobile`. Its shared UI entry is `apps/mobile/App.tsx`; native projects are
-under `apps/mobile/ios` and `apps/mobile/android`. The NestJS API and shared
-packages are additive Sprint 2 foundations.
+A full-stack TypeScript monorepo with a bare React Native app in `apps/mobile`.
+The implemented sports-offer shell follows the compact blue and charcoal
+psk.hr mobile hierarchy from the supplied recording, using FEG branding and
+demo data. The original counter is preserved as the word-count engine for the
+voice agent, widget and Dynamic Island.
 
 On iOS 16.2 or later, tap **Start Live Activity** to mirror the counter on the
 Lock Screen and in the Dynamic Island. Increasing, decreasing, or resetting the
@@ -39,9 +40,8 @@ For iOS, install CocoaPods dependencies after Xcode is installed:
 
 ```sh
 cd apps/mobile
-bundle install
-cd ios
-bundle exec pod install
+BUNDLE_PATH=vendor/bundle bundle install
+BUNDLE_PATH=vendor/bundle bundle exec pod install --project-directory=ios
 cd ../../..
 ```
 
